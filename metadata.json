@@ -1,0 +1,6 @@
+{
+  "name": "팀별 일일 업무 보고 통합 관리 시스템",
+  "description": "각 팀의 일일 업무보고 Excel 파일 통합, 대시보드, 18시 자동 업데이트, 휴가자 현황 관리 및 엑셀 내보내기",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
