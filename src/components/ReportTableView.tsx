@@ -194,11 +194,11 @@ export const ReportTableView: React.FC<ReportTableViewProps> = ({ reports }) => 
                   <tr className="bg-slate-100 border-b border-slate-200 text-slate-700 font-semibold">
                     <th className="py-3 px-2.5 w-20">팀명</th>
                     <th className="py-3 px-2.5 w-20">담당자</th>
-                    <th className="py-3 px-2.5 w-[26%]">금일 업무</th>
-                    <th className="py-3 px-2.5 w-[26%]">업무 결과</th>
-                    <th className="py-3 px-2.5 w-[26%]">익일 업무</th>
-                    <th className="py-3 px-2.5 w-28">이슈사항</th>
-                    <th className="py-3 px-2.5 w-28">비고</th>
+                    <th className="py-3 px-2.5 w-[21%]">금일 업무</th>
+                    <th className="py-3 px-2.5 w-[21%]">업무 결과</th>
+                    <th className="py-3 px-2.5 w-[21%]">익일 업무</th>
+                    <th className="py-3 px-2.5 w-[21%]">이슈사항</th>
+                    <th className="py-3 px-2.5 w-20">비고</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-800">

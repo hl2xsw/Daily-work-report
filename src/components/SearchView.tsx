@@ -255,11 +255,11 @@ export const SearchView: React.FC<SearchViewProps> = ({ reports }) => {
                   <th className="py-3 px-2.5 w-20">날짜</th>
                   <th className="py-3 px-2.5 w-20">팀명</th>
                   <th className="py-3 px-2.5 w-20">담당자</th>
-                  <th className="py-3 px-2.5 w-[24%]">금일 업무</th>
-                  <th className="py-3 px-2.5 w-[24%]">업무 결과</th>
-                  <th className="py-3 px-2.5 w-[24%]">익일 업무</th>
-                  <th className="py-3 px-2.5 w-28">이슈사항</th>
-                  <th className="py-3 px-2.5 w-28">비고</th>
+                  <th className="py-3 px-2.5 w-[20%]">금일 업무</th>
+                  <th className="py-3 px-2.5 w-[20%]">업무 결과</th>
+                  <th className="py-3 px-2.5 w-[20%]">익일 업무</th>
+                  <th className="py-3 px-2.5 w-[20%]">이슈사항</th>
+                  <th className="py-3 px-2.5 w-20">비고</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-800">
