@@ -252,41 +252,40 @@ export const SearchView: React.FC<SearchViewProps> = ({ reports }) => {
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-slate-900 text-slate-200 font-semibold">
-                  <th className="py-3 px-3 w-20">날짜</th>
-                  <th className="py-3 px-3 w-28">부문 / 팀명</th>
-                  <th className="py-3 px-3 w-24">A열: 담당자</th>
-                  <th className="py-3 px-3">B열: 금일 업무</th>
-                  <th className="py-3 px-3 w-32">C열: 업무 결과</th>
-                  <th className="py-3 px-3">D열: 익일 업무</th>
-                  <th className="py-3 px-3 w-32">E열: 이슈사항</th>
-                  <th className="py-3 px-3 w-32">F열: 비고</th>
+                  <th className="py-3 px-2.5 w-20">날짜</th>
+                  <th className="py-3 px-2.5 w-20">팀명</th>
+                  <th className="py-3 px-2.5 w-20">담당자</th>
+                  <th className="py-3 px-2.5 w-[24%]">금일 업무</th>
+                  <th className="py-3 px-2.5 w-[24%]">업무 결과</th>
+                  <th className="py-3 px-2.5 w-[24%]">익일 업무</th>
+                  <th className="py-3 px-2.5 w-28">이슈사항</th>
+                  <th className="py-3 px-2.5 w-28">비고</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-800">
                 {searchResults.map((item) => (
                   <tr key={item.id} className="hover:bg-slate-50 transition">
-                    <td className="py-3 px-3 font-mono font-medium text-slate-600 text-[11px]">
+                    <td className="py-3 px-2.5 font-mono font-medium text-slate-600 text-[11px] whitespace-nowrap">
                       {item.date}
                     </td>
-                    <td className="py-3 px-3 font-semibold text-slate-900">
-                      <div className="text-[10px] text-slate-500">{item.department}</div>
-                      <div className="text-xs text-emerald-700">{item.team}</div>
+                    <td className="py-3 px-2.5 font-bold text-emerald-700 whitespace-nowrap">
+                      {item.team}
                     </td>
-                    <td className="py-3 px-3 font-semibold text-slate-800">{item.author}</td>
-                    <td className="py-3 px-3 leading-relaxed">{item.todayTask}</td>
-                    <td className="py-3 px-3 leading-relaxed bg-sky-50/20">
+                    <td className="py-3 px-2.5 font-semibold text-slate-800 whitespace-nowrap">{item.author}</td>
+                    <td className="py-3 px-2.5 leading-relaxed">{item.todayTask}</td>
+                    <td className="py-3 px-2.5 leading-relaxed bg-sky-50/20">
                       <span className="block font-semibold text-sky-800 text-[10px] mb-0.5">상태: {item.status}</span>
                       {item.taskResult || '-'}
                     </td>
-                    <td className="py-3 px-3 leading-relaxed bg-slate-50/50">{item.tomorrowTask}</td>
-                    <td className="py-3 px-3 text-[11px]">
+                    <td className="py-3 px-2.5 leading-relaxed bg-slate-50/50">{item.tomorrowTask}</td>
+                    <td className="py-3 px-2.5 text-[11px]">
                       {item.issues && item.issues !== '-' && item.issues !== '없음' && item.issues !== '특이사항 없음' ? (
                         <span className="text-red-600 font-medium">⚠️ {item.issues}</span>
                       ) : (
                         <span className="text-slate-400">-</span>
                       )}
                     </td>
-                    <td className="py-3 px-3 text-[11px] text-slate-600">
+                    <td className="py-3 px-2.5 text-[11px] text-slate-600">
                       {item.remarks || '-'}
                     </td>
                   </tr>

@@ -192,39 +192,38 @@ export const ReportTableView: React.FC<ReportTableViewProps> = ({ reports }) => 
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="bg-slate-100 border-b border-slate-200 text-slate-700 font-semibold">
-                    <th className="py-3 px-3 w-28">부문 / 팀명</th>
-                    <th className="py-3 px-3 w-24">A열: 담당자</th>
-                    <th className="py-3 px-3">B열: 금일 업무</th>
-                    <th className="py-3 px-3 w-36">C열: 업무 결과</th>
-                    <th className="py-3 px-3">D열: 익일 업무</th>
-                    <th className="py-3 px-3 w-40">E열: 이슈사항</th>
-                    <th className="py-3 px-3 w-36">F열: 비고 / 휴가</th>
+                    <th className="py-3 px-2.5 w-20">팀명</th>
+                    <th className="py-3 px-2.5 w-20">담당자</th>
+                    <th className="py-3 px-2.5 w-[26%]">금일 업무</th>
+                    <th className="py-3 px-2.5 w-[26%]">업무 결과</th>
+                    <th className="py-3 px-2.5 w-[26%]">익일 업무</th>
+                    <th className="py-3 px-2.5 w-28">이슈사항</th>
+                    <th className="py-3 px-2.5 w-28">비고</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-800">
                   {items.map((item) => (
                     <tr key={item.id} className="hover:bg-slate-50/80 transition">
-                      {/* Department & Team */}
-                      <td className="py-3.5 px-3 font-semibold text-slate-900">
-                        <div className="text-[11px] text-slate-500">{item.department}</div>
-                        <div className="text-xs text-emerald-700 font-bold">{item.team}</div>
+                      {/* Team */}
+                      <td className="py-3 px-2.5 font-bold text-emerald-700 whitespace-nowrap">
+                        {item.team}
                       </td>
 
-                      {/* A열: Author */}
-                      <td className="py-3.5 px-3 font-semibold text-slate-800">
+                      {/* Author */}
+                      <td className="py-3 px-2.5 font-semibold text-slate-800 whitespace-nowrap">
                         <div className="flex items-center space-x-1">
                           <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                           <span>{item.author}</span>
                         </div>
                       </td>
 
-                      {/* B열: Today Task */}
-                      <td className="py-3.5 px-3 text-slate-800 leading-relaxed font-normal">
+                      {/* Today Task */}
+                      <td className="py-3 px-2.5 text-slate-800 leading-relaxed font-normal">
                         <p className="whitespace-pre-line">{item.todayTask}</p>
                       </td>
 
-                      {/* C열: Task Result & Status */}
-                      <td className="py-3.5 px-3 text-slate-800 leading-relaxed font-normal bg-sky-50/30">
+                      {/* Task Result & Status */}
+                      <td className="py-3 px-2.5 text-slate-800 leading-relaxed font-normal bg-sky-50/30">
                         <div className="mb-1">
                           {item.status === '완료' && (
                             <span className="inline-flex items-center space-x-1 px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded-full text-[10px]">
@@ -248,13 +247,13 @@ export const ReportTableView: React.FC<ReportTableViewProps> = ({ reports }) => 
                         <p className="whitespace-pre-line text-xs font-medium text-slate-700">{item.taskResult || '-'}</p>
                       </td>
 
-                      {/* D열: Tomorrow Task */}
-                      <td className="py-3.5 px-3 text-slate-700 leading-relaxed font-normal bg-slate-50/50">
+                      {/* Tomorrow Task */}
+                      <td className="py-3 px-2.5 text-slate-700 leading-relaxed font-normal bg-slate-50/50">
                         <p className="whitespace-pre-line">{item.tomorrowTask}</p>
                       </td>
 
-                      {/* E열: Issues */}
-                      <td className="py-3.5 px-3">
+                      {/* Issues */}
+                      <td className="py-3 px-2.5">
                         {item.issues && item.issues !== '-' && item.issues !== '없음' && item.issues !== '특이사항 없음' ? (
                           <div className="bg-red-50 text-red-700 border border-red-200 p-2 rounded-lg text-[11px] font-medium leading-tight whitespace-pre-line">
                             ⚠️ {item.issues}
@@ -264,8 +263,8 @@ export const ReportTableView: React.FC<ReportTableViewProps> = ({ reports }) => 
                         )}
                       </td>
 
-                      {/* F열: Remarks & Vacation Tag */}
-                      <td className="py-3.5 px-3">
+                      {/* Remarks & Vacation Tag */}
+                      <td className="py-3 px-2.5">
                         {item.remarks && item.remarks !== '-' && (
                           <p className="text-xs text-slate-700 mb-1 whitespace-pre-line">{item.remarks}</p>
                         )}
