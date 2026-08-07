@@ -72,21 +72,28 @@ export default function App() {
 
   // Manual & Auto Update Action from watched folder
   const handleTriggerUpdate = () => {
-    const folderPath = localStorage.getItem('watched_folder_path') || 'C:\\WorkReports\\Daily_Excel_Sync\\';
+    const folderPath = localStorage.getItem('watched_folder_path') || 'D:\\Data_JAC\\_EV Innovation 부문\\업무일지\\8월';
     setIsUpdating(true);
-    showToast(`🔄 감시 폴더(${folderPath}) 및 하위 폴더 전체 스캔 중...`);
+    showToast(`🔄 감시 폴더(${folderPath}) 및 하위 폴더 전체 스캔을 위해 [업로드/동기화] 탭으로 이동합니다.`);
 
     setTimeout(() => {
       const nowStr = new Date().toLocaleTimeString('ko-KR');
       setLastSyncTime(nowStr);
       setIsUpdating(false);
+      setActiveTab('upload');
+    }, 600);
+  };
 
-      if (reports.length === 0) {
-        showToast(`ℹ️ 감시 폴더(${folderPath}) 및 하위 폴더 탐색 완료: 읽어올 신규 엑셀 파일이 없습니다. [엑셀 파일 수동 업로드] 탭에서 폴더 또는 .xlsx 파일을 선택해 주세요.`);
-      } else {
-        showToast(`✅ 감시 폴더(${folderPath}) 및 하위 폴더 최신화 동기화 완료! (총 ${reports.length}건)`);
-      }
-    }, 1000);
+  // Clear all data manually if user wants a clean slate
+  const handleClearAllData = () => {
+    if (window.confirm('정말로 수집된 모든 업무일지 데이터와 이력을 초기화하시겠습니까?')) {
+      setReports([]);
+      setImportedFilesHistory([]);
+      localStorage.removeItem('work_reports_data');
+      localStorage.removeItem('imported_files_history');
+      setSelectedDate('');
+      showToast('🧹 모든 업무일지 데이터와 수집 이력이 초기화되었습니다.');
+    }
   };
 
   // Import uploaded custom files
@@ -156,6 +163,7 @@ export default function App() {
           <FileUploadView
             onImportReports={handleImportReports}
             onTriggerUpdate={handleTriggerUpdate}
+            onClearAllData={handleClearAllData}
             isUpdating={isUpdating}
             importedFilesHistory={importedFilesHistory}
           />

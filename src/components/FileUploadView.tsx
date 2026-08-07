@@ -10,11 +10,14 @@ import {
   RefreshCw,
   Layers,
   Save,
+  Trash2,
+  Info,
 } from 'lucide-react';
 
 interface FileUploadViewProps {
   onImportReports: (newReports: WorkReportItem[], fileNames?: string[]) => void;
   onTriggerUpdate: () => void;
+  onClearAllData?: () => void;
   isUpdating: boolean;
   importedFilesHistory: string[];
 }
@@ -22,11 +25,12 @@ interface FileUploadViewProps {
 export const FileUploadView: React.FC<FileUploadViewProps> = ({
   onImportReports,
   onTriggerUpdate,
+  onClearAllData,
   isUpdating,
   importedFilesHistory,
 }) => {
   const [folderPath, setFolderPath] = useState<string>(() => {
-    return localStorage.getItem('watched_folder_path') || 'C:\\WorkReports\\Daily_Excel_Sync\\';
+    return localStorage.getItem('watched_folder_path') || 'D:\\Data_JAC\\_EV Innovation 부문\\업무일지\\8월';
   });
   const [folderSaved, setFolderSaved] = useState<boolean>(false);
   const [uploadStatus, setUploadStatus] = useState<string>('');
@@ -231,14 +235,26 @@ export const FileUploadView: React.FC<FileUploadViewProps> = ({
 
       {/* History log of imported files */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-        <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
-          <Layers className="w-4 h-4 text-slate-500" />
-          최근 동기화 수집 파일 이력 ({importedFilesHistory.length}건)
-        </h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+            <Layers className="w-4 h-4 text-slate-500" />
+            최근 동기화 수집 파일 이력 ({importedFilesHistory.length}건)
+          </h3>
+
+          {onClearAllData && importedFilesHistory.length > 0 && (
+            <button
+              onClick={onClearAllData}
+              className="flex items-center space-x-1 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold rounded-lg transition"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>데이터 전체 초기화</span>
+            </button>
+          )}
+        </div>
 
         {importedFilesHistory.length === 0 ? (
           <div className="text-xs text-slate-400 py-6 text-center italic bg-slate-50 rounded-lg border border-slate-200/80">
-            동기화 수집된 엑셀 파일 이력이 없습니다. 일지 파일(.xlsx) 또는 폴더를 선택해 주세요.
+            동기화 수집된 엑셀 파일 이력이 없습니다. 상단 [폴더 전체 선택] 또는 [파일 선택]으로 일지(.xlsx)를 읽어와주세요.
           </div>
         ) : (
           <div className="space-y-2">
