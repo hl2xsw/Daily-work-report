@@ -192,89 +192,95 @@ export const ReportTableView: React.FC<ReportTableViewProps> = ({ reports }) => 
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="bg-slate-100 border-b border-slate-200 text-slate-700 font-semibold">
-                    <th className="py-3 px-4 w-28">부문 / 팀명</th>
-                    <th className="py-3 px-4 w-28">담당자</th>
-                    <th className="py-3 px-4">금일 업무 (Today)</th>
-                    <th className="py-3 px-4">익일 업무 (Tomorrow)</th>
-                    <th className="py-3 px-4 w-24 text-center">진행 상태</th>
-                    <th className="py-3 px-4 w-48">이슈 및 조치사항</th>
-                    <th className="py-3 px-4 w-32 text-center">휴가 정보</th>
+                    <th className="py-3 px-3 w-28">부문 / 팀명</th>
+                    <th className="py-3 px-3 w-24">A열: 담당자</th>
+                    <th className="py-3 px-3">B열: 금일 업무</th>
+                    <th className="py-3 px-3 w-36">C열: 업무 결과</th>
+                    <th className="py-3 px-3">D열: 익일 업무</th>
+                    <th className="py-3 px-3 w-40">E열: 이슈사항</th>
+                    <th className="py-3 px-3 w-36">F열: 비고 / 휴가</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-800">
                   {items.map((item) => (
                     <tr key={item.id} className="hover:bg-slate-50/80 transition">
                       {/* Department & Team */}
-                      <td className="py-3.5 px-4 font-semibold text-slate-900">
+                      <td className="py-3.5 px-3 font-semibold text-slate-900">
                         <div className="text-[11px] text-slate-500">{item.department}</div>
                         <div className="text-xs text-emerald-700 font-bold">{item.team}</div>
                       </td>
 
-                      {/* Author */}
-                      <td className="py-3.5 px-4 font-semibold text-slate-800">
-                        <div className="flex items-center space-x-1.5">
-                          <User className="w-3.5 h-3.5 text-slate-400" />
+                      {/* A열: Author */}
+                      <td className="py-3.5 px-3 font-semibold text-slate-800">
+                        <div className="flex items-center space-x-1">
+                          <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                           <span>{item.author}</span>
                         </div>
                       </td>
 
-                      {/* Today Task */}
-                      <td className="py-3.5 px-4 text-slate-800 leading-relaxed font-normal">
+                      {/* B열: Today Task */}
+                      <td className="py-3.5 px-3 text-slate-800 leading-relaxed font-normal">
                         <p className="whitespace-pre-line">{item.todayTask}</p>
                       </td>
 
-                      {/* Tomorrow Task */}
-                      <td className="py-3.5 px-4 text-slate-700 leading-relaxed font-normal bg-slate-50/50">
+                      {/* C열: Task Result & Status */}
+                      <td className="py-3.5 px-3 text-slate-800 leading-relaxed font-normal bg-sky-50/30">
+                        <div className="mb-1">
+                          {item.status === '완료' && (
+                            <span className="inline-flex items-center space-x-1 px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded-full text-[10px]">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              <span>완료</span>
+                            </span>
+                          )}
+                          {item.status === '진행중' && (
+                            <span className="inline-flex items-center space-x-1 px-2 py-0.5 bg-sky-100 text-sky-800 font-bold rounded-full text-[10px]">
+                              <Clock className="w-3 h-3 text-sky-600" />
+                              <span>진행중</span>
+                            </span>
+                          )}
+                          {(item.status === '지연' || item.status === '대기') && (
+                            <span className="inline-flex items-center space-x-1 px-2 py-0.5 bg-amber-100 text-amber-800 font-bold rounded-full text-[10px]">
+                              <AlertCircle className="w-3 h-3 text-amber-600" />
+                              <span>지연/대기</span>
+                            </span>
+                          )}
+                        </div>
+                        <p className="whitespace-pre-line text-xs font-medium text-slate-700">{item.taskResult || '-'}</p>
+                      </td>
+
+                      {/* D열: Tomorrow Task */}
+                      <td className="py-3.5 px-3 text-slate-700 leading-relaxed font-normal bg-slate-50/50">
                         <p className="whitespace-pre-line">{item.tomorrowTask}</p>
                       </td>
 
-                      {/* Status */}
-                      <td className="py-3.5 px-4 text-center">
-                        {item.status === '완료' && (
-                          <span className="inline-flex items-center space-x-1 px-2.5 py-1 bg-emerald-100 text-emerald-800 font-bold rounded-full text-[11px]">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                            <span>완료</span>
-                          </span>
-                        )}
-                        {item.status === '진행중' && (
-                          <span className="inline-flex items-center space-x-1 px-2.5 py-1 bg-sky-100 text-sky-800 font-bold rounded-full text-[11px]">
-                            <Clock className="w-3 h-3 text-sky-600" />
-                            <span>진행중</span>
-                          </span>
-                        )}
-                        {(item.status === '지연' || item.status === '대기') && (
-                          <span className="inline-flex items-center space-x-1 px-2.5 py-1 bg-amber-100 text-amber-800 font-bold rounded-full text-[11px]">
-                            <AlertCircle className="w-3 h-3 text-amber-600" />
-                            <span>지연/대기</span>
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Issues */}
-                      <td className="py-3.5 px-4">
+                      {/* E열: Issues */}
+                      <td className="py-3.5 px-3">
                         {item.issues && item.issues !== '-' && item.issues !== '없음' && item.issues !== '특이사항 없음' ? (
-                          <div className="bg-red-50 text-red-700 border border-red-200 p-2 rounded-lg text-[11px] font-medium leading-tight">
+                          <div className="bg-red-50 text-red-700 border border-red-200 p-2 rounded-lg text-[11px] font-medium leading-tight whitespace-pre-line">
                             ⚠️ {item.issues}
                           </div>
                         ) : (
-                          <span className="text-slate-400 text-[11px]">특이사항 없음</span>
+                          <span className="text-slate-400 text-[11px]">-</span>
                         )}
                       </td>
 
-                      {/* Vacation Tag */}
-                      <td className="py-3.5 px-4 text-center">
+                      {/* F열: Remarks & Vacation Tag */}
+                      <td className="py-3.5 px-3">
+                        {item.remarks && item.remarks !== '-' && (
+                          <p className="text-xs text-slate-700 mb-1 whitespace-pre-line">{item.remarks}</p>
+                        )}
                         {item.isVacationToday && (
-                          <span className="block mb-1 px-2 py-0.5 bg-purple-100 text-purple-800 rounded font-semibold text-[10px]">
+                          <span className="inline-block mb-1 mr-1 px-2 py-0.5 bg-purple-100 text-purple-800 rounded font-semibold text-[10px]">
                             금일: {item.vacationTypeToday || '연차'}
                           </span>
                         )}
                         {item.isVacationTomorrow && (
-                          <span className="block px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded font-semibold text-[10px]">
+                          <span className="inline-block px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded font-semibold text-[10px]">
                             익일: {item.vacationTypeTomorrow || '연차'}
                           </span>
                         )}
-                        {!item.isVacationToday && !item.isVacationTomorrow && (
-                          <span className="text-slate-400 text-[11px]">정상근무</span>
+                        {!item.isVacationToday && !item.isVacationTomorrow && (!item.remarks || item.remarks === '-') && (
+                          <span className="text-slate-400 text-[11px]">-</span>
                         )}
                       </td>
                     </tr>

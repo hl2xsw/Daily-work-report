@@ -7,10 +7,12 @@ export interface WorkReportItem {
   department: string; // 부문 (e.g. 전력사업부문, IT개발부문, 서비스운영부문)
   team: string; // 팀명 (e.g. 그리드팀, 개발팀, 운영팀)
   author: string; // 담당자 (e.g. 김철수)
-  todayTask: string; // 금일 업무
-  tomorrowTask: string; // 익일 업무
+  todayTask: string; // 금일 업무 (B열)
+  taskResult?: string; // 업무 결과 (C열)
+  tomorrowTask: string; // 익일 업무 (D열)
   status: WorkStatus; // 업무 상태
-  issues: string; // 이슈사항 및 조치계획
+  issues: string; // 이슈사항 (E열)
+  remarks?: string; // 비고 (F열)
   isVacationToday?: boolean; // 금일 휴가 여부
   isVacationTomorrow?: boolean; // 익일 휴가 여부
   vacationTypeToday?: string; // 연차, 반차, 병가 등

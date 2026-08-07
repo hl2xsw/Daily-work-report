@@ -60,7 +60,7 @@ export async function parseExcelFile(file: File): Promise<WorkReportItem[]> {
   const data = await file.arrayBuffer();
   const workbook = XLSX.read(data, { type: 'array' });
 
-  // Get metadata from filename
+  // Get metadata from filename as fallback
   const meta = parseFileNameMetadata(file.name);
 
   const firstSheetName = workbook.SheetNames[0];
@@ -68,46 +68,71 @@ export async function parseExcelFile(file: File): Promise<WorkReportItem[]> {
   const jsonRows: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
   if (!jsonRows || jsonRows.length === 0) {
-    throw new Error('엑셀 파일에 데이터가 없습니다.');
+    return [];
   }
 
-  // Find header row or parse rows
-  const parsedItems: WorkReportItem[] = [];
+  // 1. Extract team name from the 1st row (Row 0)
+  let teamFromRow1 = '';
+  if (jsonRows.length > 0 && Array.isArray(jsonRows[0])) {
+    const row0Cells = jsonRows[0].map((cell: any) => String(cell || '').trim()).filter(Boolean);
+    const row0Combined = row0Cells.join(' ');
+    
+    // Look for explicit team pattern e.g., "EV Innovation 부문", "그리드팀", "팀명: OO팀"
+    const teamMatch = row0Combined.match(/(?:팀명|소속|팀|부서|부문)?\s*[:：]?\s*([가-힣a-zA-Z0-9_\- ]+(?:팀|부문|파트|센터|실|그룹))/i);
+    if (teamMatch && teamMatch[1] && teamMatch[1].length < 30) {
+      teamFromRow1 = teamMatch[1].trim();
+    } else if (row0Cells.length > 0) {
+      // If 1st row is short title like "EV Innovation 부문 업무일지" or "개발팀"
+      const cleaned0 = row0Cells[0].replace(/(?:업무일지|일일업무보고|업무공유|일지|보고서)/g, '').trim();
+      if (cleaned0.length > 1 && cleaned0.length < 25) {
+        teamFromRow1 = cleaned0;
+      }
+    }
+  }
 
-  // Look for columns: 날짜, 부문, 팀명, 담당자, 금일업무, 익일업무, 상태, 이슈사항, 휴가(금일), 휴가(익일)
+  const finalTeamName = teamFromRow1 || meta.team;
+
+  // 2. Find Header Row or Column Mapping
+  // User standard mapping requirement:
+  // A열(0) : 담당자
+  // B열(1) : 금일 업무
+  // C열(2) : 업무 결과
+  // D열(3) : 익일 업무
+  // E열(4) : 이슈사항
+  // F열(5) : 비고
   let headerIndex = -1;
-  let colMap: Record<string, number> = {};
+  let colMap: Record<string, number> = {
+    author: 0,
+    todayTask: 1,
+    taskResult: 2,
+    tomorrowTask: 3,
+    issues: 4,
+    remarks: 5,
+  };
 
   for (let r = 0; r < Math.min(jsonRows.length, 10); r++) {
     const row = jsonRows[r];
     if (Array.isArray(row)) {
       const rowStr = row.map((cell) => String(cell || '').trim());
-      if (
-        rowStr.some(
-          (c) =>
-            c.includes('담당자') ||
-            c.includes('금일업무') ||
-            c.includes('업무내용') ||
-            c.includes('이름')
-        )
-      ) {
+      const isHeader = rowStr.some(
+        (c) =>
+          c.includes('담당자') ||
+          c.includes('성명') ||
+          c.includes('이름') ||
+          c.includes('금일') ||
+          c.includes('업무내용') ||
+          c.includes('익일')
+      );
+
+      if (isHeader) {
         headerIndex = r;
         rowStr.forEach((colName, cIdx) => {
-          if (colName.includes('날짜') || colName.includes('일자')) colMap['date'] = cIdx;
-          if (colName.includes('부문') || colName.includes('본부')) colMap['department'] = cIdx;
-          if (colName.includes('팀')) colMap['team'] = cIdx;
-          if (colName.includes('담당자') || colName.includes('이름') || colName.includes('성명'))
-            colMap['author'] = cIdx;
-          if (colName.includes('금일') || colName.includes('오늘') || colName.includes('금일업무'))
-            colMap['todayTask'] = cIdx;
-          if (colName.includes('익일') || colName.includes('내일') || colName.includes('익일업무'))
-            colMap['tomorrowTask'] = cIdx;
-          if (colName.includes('상태') || colName.includes('진행결과') || colName.includes('결과'))
-            colMap['status'] = cIdx;
-          if (colName.includes('이슈') || colName.includes('비고') || colName.includes('특이사항'))
-            colMap['issues'] = cIdx;
-          if (colName.includes('금일휴가') || colName.includes('오늘휴가')) colMap['vacationToday'] = cIdx;
-          if (colName.includes('익일휴가') || colName.includes('내일휴가')) colMap['vacationTomorrow'] = cIdx;
+          if (colName.includes('담당자') || colName.includes('성명') || colName.includes('이름')) colMap['author'] = cIdx;
+          else if (colName.includes('금일') || colName.includes('오늘업무') || (colName.includes('업무') && !colName.includes('익일') && !colName.includes('결과'))) colMap['todayTask'] = cIdx;
+          else if (colName.includes('결과') || colName.includes('진행상황') || colName.includes('상태')) colMap['taskResult'] = cIdx;
+          else if (colName.includes('익일') || colName.includes('내일')) colMap['tomorrowTask'] = cIdx;
+          else if (colName.includes('이슈') || colName.includes('특이사항') || colName.includes('문제')) colMap['issues'] = cIdx;
+          else if (colName.includes('비고') || colName.includes('휴가') || colName.includes('메모')) colMap['remarks'] = cIdx;
         });
         break;
       }
@@ -115,87 +140,120 @@ export async function parseExcelFile(file: File): Promise<WorkReportItem[]> {
   }
 
   const startRow = headerIndex >= 0 ? headerIndex + 1 : 1;
+  const parsedItems: WorkReportItem[] = [];
 
   for (let i = startRow; i < jsonRows.length; i++) {
     const row = jsonRows[i];
     if (!row || !Array.isArray(row) || row.length === 0) continue;
 
-    const author = String(
-      row[colMap['author'] ?? 2] || row[0] || ''
-    ).trim();
-    if (!author || author === '담당자' || author.includes('합계')) continue;
+    const author = String(row[colMap['author'] ?? 0] || '').trim();
+    
+    // Ignore invalid/empty rows or headers
+    if (
+      !author ||
+      author === '담당자' ||
+      author === '성명' ||
+      author === '이름' ||
+      author.includes('합계') ||
+      author.includes('소계') ||
+      author.includes('TOTAL')
+    ) {
+      continue;
+    }
 
-    const todayTask = String(
-      row[colMap['todayTask'] ?? 3] || row[1] || ''
-    ).trim();
-    const tomorrowTask = String(
-      row[colMap['tomorrowTask'] ?? 4] || row[2] || ''
-    ).trim();
-    const statusRaw = String(
-      row[colMap['status'] ?? 5] || '진행중'
-    ).trim();
-    const issues = String(
-      row[colMap['issues'] ?? 6] || '-'
-    ).trim();
-    const departmentRaw = String(
-      row[colMap['department'] ?? 0] || '전력사업부문'
-    ).trim();
-    const teamRaw = String(
-      row[colMap['team'] ?? 1] || meta.team
-    ).trim();
+    const todayTask = String(row[colMap['todayTask'] ?? 1] || '').trim();
+    const taskResult = String(row[colMap['taskResult'] ?? 2] || '').trim();
+    const tomorrowTask = String(row[colMap['tomorrowTask'] ?? 3] || '').trim();
+    const issues = String(row[colMap['issues'] ?? 4] || '').trim();
+    const remarks = String(row[colMap['remarks'] ?? 5] || '').trim();
 
+    // Skip if all task fields are empty
+    if (!todayTask && !tomorrowTask && !taskResult && !issues && !remarks) {
+      continue;
+    }
+
+    // Work Status Determination
     let status: WorkStatus = '진행중';
-    if (statusRaw.includes('완료')) status = '완료';
-    else if (statusRaw.includes('지연')) status = '지연';
-    else if (statusRaw.includes('대기')) status = '대기';
+    const combinedStatusText = `${taskResult} ${remarks} ${todayTask}`.toLowerCase();
 
-    const vacationTodayVal = String(row[colMap['vacationToday'] ?? 7] || '').trim();
-    const vacationTomorrowVal = String(row[colMap['vacationTomorrow'] ?? 8] || '').trim();
+    if (
+      combinedStatusText.includes('완료') ||
+      combinedStatusText.includes('100%') ||
+      combinedStatusText.includes('done') ||
+      combinedStatusText.includes('종료') ||
+      combinedStatusText.includes('양호')
+    ) {
+      status = '완료';
+    } else if (
+      combinedStatusText.includes('지연') ||
+      combinedStatusText.includes('미흡') ||
+      combinedStatusText.includes('delay') ||
+      combinedStatusText.includes('중단') ||
+      combinedStatusText.includes('홀드')
+    ) {
+      status = '지연';
+    } else if (
+      combinedStatusText.includes('대기') ||
+      combinedStatusText.includes('예정') ||
+      combinedStatusText.includes('pending')
+    ) {
+      status = '대기';
+    }
 
+    // Vacation Detection from B열, D열, F열 (금일, 익일, 비고)
+    const combinedVacationText = `${todayTask} ${tomorrowTask} ${remarks}`;
     const isVacationToday =
       todayTask.includes('휴가') ||
       todayTask.includes('연차') ||
-      vacationTodayVal.length > 0;
+      todayTask.includes('반차') ||
+      remarks.includes('금일휴가') ||
+      remarks.includes('금일 연차') ||
+      remarks.includes('휴가');
+
     const isVacationTomorrow =
       tomorrowTask.includes('휴가') ||
       tomorrowTask.includes('연차') ||
-      vacationTomorrowVal.length > 0;
+      tomorrowTask.includes('반차') ||
+      remarks.includes('익일휴가') ||
+      remarks.includes('익일 연차');
+
+    let vacationTypeToday = undefined;
+    if (isVacationToday) {
+      if (combinedVacationText.includes('오전반차') || combinedVacationText.includes('오전 반차')) vacationTypeToday = '오전반차';
+      else if (combinedVacationText.includes('오후반차') || combinedVacationText.includes('오후 반차')) vacationTypeToday = '오후반차';
+      else if (combinedVacationText.includes('반차')) vacationTypeToday = '반차';
+      else if (combinedVacationText.includes('병가')) vacationTypeToday = '병가';
+      else if (combinedVacationText.includes('공가')) vacationTypeToday = '공가';
+      else vacationTypeToday = '연차';
+    }
+
+    let vacationTypeTomorrow = undefined;
+    if (isVacationTomorrow) {
+      if (combinedVacationText.includes('오전반차') || combinedVacationText.includes('오전 반차')) vacationTypeTomorrow = '오전반차';
+      else if (combinedVacationText.includes('오후반차') || combinedVacationText.includes('오후 반차')) vacationTypeTomorrow = '오후반차';
+      else if (combinedVacationText.includes('반차')) vacationTypeTomorrow = '반차';
+      else if (combinedVacationText.includes('병가')) vacationTypeTomorrow = '병가';
+      else if (combinedVacationText.includes('공가')) vacationTypeTomorrow = '공가';
+      else vacationTypeTomorrow = '연차';
+    }
 
     parsedItems.push({
-      id: `rep-up-${Date.now()}-${i}`,
+      id: `rep-up-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 4)}`,
       date: meta.date,
       displayDate: meta.displayDate,
-      department: departmentRaw,
-      team: teamRaw || meta.team,
+      department: 'EV Innovation 부문',
+      team: finalTeamName,
       author: author,
-      todayTask: todayTask || '업무 일지 내용 참조',
-      tomorrowTask: tomorrowTask || '계획 수립 예정',
+      todayTask: todayTask || '-',
+      taskResult: taskResult || '-',
+      tomorrowTask: tomorrowTask || '-',
       status: status,
-      issues: issues || '없음',
+      issues: issues || '-',
+      remarks: remarks || '-',
       isVacationToday: isVacationToday,
-      vacationTypeToday: isVacationToday ? vacationTodayVal || '연차' : undefined,
+      vacationTypeToday: vacationTypeToday,
       isVacationTomorrow: isVacationTomorrow,
-      vacationTypeTomorrow: isVacationTomorrow ? vacationTomorrowVal || '연차' : undefined,
-      sourceFileName: file.name,
-      updatedAt: new Date().toISOString(),
-    });
-  }
-
-  // If parsed list is empty, build at least 1 fallback record from filename
-  if (parsedItems.length === 0) {
-    parsedItems.push({
-      id: `rep-fallback-${Date.now()}`,
-      date: meta.date,
-      displayDate: meta.displayDate,
-      department: '전력사업부문',
-      team: meta.team,
-      author: '담당자 (엑셀자동파싱)',
-      todayTask: `${meta.team} 일일 업무 진행 완료 (파일명: ${file.name})`,
-      tomorrowTask: `${meta.team} 일일 계획 실행`,
-      status: '완료',
-      issues: '특이사항 없음',
-      isVacationToday: false,
-      isVacationTomorrow: false,
+      vacationTypeTomorrow: vacationTypeTomorrow,
       sourceFileName: file.name,
       updatedAt: new Date().toISOString(),
     });
