@@ -1,16 +1,15 @@
 import React, { useState } from 'react';
 import { WorkReportItem } from '../types';
-import { parseExcelFile, generateSampleExcelFile } from '../utils/excelParser';
+import { parseExcelFile } from '../utils/excelParser';
 import {
   UploadCloud,
   FileSpreadsheet,
   FolderSync,
   CheckCircle2,
   AlertCircle,
-  Download,
   RefreshCw,
-  Info,
   Layers,
+  Save,
 } from 'lucide-react';
 
 interface FileUploadViewProps {
@@ -26,9 +25,20 @@ export const FileUploadView: React.FC<FileUploadViewProps> = ({
   isUpdating,
   importedFilesHistory,
 }) => {
-  const [folderPath, setFolderPath] = useState<string>('C:\\WorkReports\\Daily_Excel_Sync\\');
+  const [folderPath, setFolderPath] = useState<string>(() => {
+    return localStorage.getItem('watched_folder_path') || 'C:\\WorkReports\\Daily_Excel_Sync\\';
+  });
+  const [folderSaved, setFolderSaved] = useState<boolean>(false);
   const [uploadStatus, setUploadStatus] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string>('');
+
+  const handleSaveFolderPath = () => {
+    localStorage.setItem('watched_folder_path', folderPath);
+    setFolderSaved(true);
+    setTimeout(() => {
+      setFolderSaved(false);
+    }, 3000);
+  };
 
   // Handle Drag & Drop / File Input
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -106,13 +116,28 @@ export const FileUploadView: React.FC<FileUploadViewProps> = ({
                   <input
                     type="text"
                     value={folderPath}
-                    onChange={(e) => setFolderPath(e.target.value)}
+                    onChange={(e) => {
+                      setFolderPath(e.target.value);
+                      setFolderSaved(false);
+                    }}
                     className="w-full bg-slate-950 border border-slate-700 text-slate-200 text-xs font-mono px-3 py-2 rounded-lg focus:outline-none focus:border-blue-500"
                   />
-                  <span className="text-[10px] bg-blue-950 text-blue-300 border border-blue-800 px-2 py-1.5 rounded whitespace-nowrap">
-                    동기화중
-                  </span>
+                  <button
+                    type="button"
+                    onClick={handleSaveFolderPath}
+                    className="flex items-center space-x-1 px-3.5 py-2 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white text-xs font-bold rounded-lg transition-all whitespace-nowrap shadow-xs"
+                    title="감시 폴더 경로 저장"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>저장</span>
+                  </button>
                 </div>
+                {folderSaved && (
+                  <p className="text-[11px] text-emerald-400 font-semibold mt-1 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>감시 폴더 경로가 성공적으로 저장되었습니다.</span>
+                  </p>
+                )}
               </div>
 
               <div className="bg-slate-950/80 rounded-lg p-3 text-xs text-slate-400 border border-slate-800 space-y-1">
@@ -174,45 +199,6 @@ export const FileUploadView: React.FC<FileUploadViewProps> = ({
               <span>{errorMsg}</span>
             </div>
           )}
-        </div>
-      </div>
-
-      {/* Box 3: Download Sample Excel Files for Instant Testing */}
-      <div className="bg-gradient-to-r from-emerald-900 to-slate-900 text-slate-100 rounded-xl p-5 border border-emerald-800/60 shadow-md">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <Download className="w-4 h-4 text-emerald-400" />
-              테스트용 샘플 팀별 엑셀 파일 다운로드 (.xlsx)
-            </h3>
-            <p className="text-xs text-slate-300 mt-1">
-              실제 `260803 그리드팀 업무 공유.xlsx` 규격 파일 샘플을 내 PC에 다운로드하여 직접 업로드 테스트를 진행해보실 수 있습니다.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => generateSampleExcelFile('그리드팀', '260803')}
-              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-sm transition flex items-center space-x-1.5"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>260803 그리드팀 엑셀 다운로드</span>
-            </button>
-            <button
-              onClick={() => generateSampleExcelFile('개발팀', '260803')}
-              className="px-3.5 py-2 bg-teal-700 hover:bg-teal-600 text-white text-xs font-bold rounded-lg shadow-sm transition flex items-center space-x-1.5"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>260803 개발팀 엑셀 다운로드</span>
-            </button>
-            <button
-              onClick={() => generateSampleExcelFile('운영팀', '260803')}
-              className="px-3.5 py-2 bg-sky-700 hover:bg-sky-600 text-white text-xs font-bold rounded-lg shadow-sm transition flex items-center space-x-1.5"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>260803 운영팀 엑셀 다운로드</span>
-            </button>
-          </div>
         </div>
       </div>
 
