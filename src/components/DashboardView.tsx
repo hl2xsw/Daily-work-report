@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   Clock,
   AlertTriangle,
+  AlertCircle,
   Users,
   Palmtree,
   Calendar,
@@ -157,6 +158,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   return (
     <div className="space-y-6 pb-12">
+      {reports.length === 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 flex items-start space-x-3 text-amber-900 shadow-xs">
+          <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <h3 className="text-sm font-bold text-amber-900">등록된 동기화 업무보고 데이터가 없습니다</h3>
+            <p className="text-xs text-amber-800 mt-1">
+              현재 수집된 팀별 일지(.xlsx) 데이터가 없습니다. 상단 메뉴의 <strong>[엑셀 파일 수동 업로드]</strong> 탭에서 일지 파일(.xlsx) 또는 폴더(하위 폴더 포함)를 업로드하여 동기화해 주세요.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Date Bar Selector */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center space-x-3">

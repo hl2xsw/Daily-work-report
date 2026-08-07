@@ -74,118 +74,45 @@ export default function App() {
   const handleTriggerUpdate = () => {
     const folderPath = localStorage.getItem('watched_folder_path') || 'C:\\WorkReports\\Daily_Excel_Sync\\';
     setIsUpdating(true);
-    showToast(`🔄 감시 폴더(${folderPath})에서 업무일지 수집 중...`);
+    showToast(`🔄 감시 폴더(${folderPath}) 및 하위 폴더 전체 스캔 중...`);
 
     setTimeout(() => {
-      const today = new Date();
-      const yyyy = today.getFullYear();
-      const mm = String(today.getMonth() + 1).padStart(2, '0');
-      const dd = String(today.getDate()).padStart(2, '0');
-      const dateStr = `${yyyy}-${mm}-${dd}`;
-      const displayDateStr = `${yyyy}년 ${mm}월 ${dd}일`;
-      const dateCode = `${String(yyyy).slice(2)}${mm}${dd}`;
-
-      const newItems: WorkReportItem[] = [
-        {
-          id: `rep-sync-${Date.now()}-1`,
-          date: dateStr,
-          displayDate: displayDateStr,
-          department: '전력사업부문',
-          team: '그리드팀',
-          author: '김철수 팀장',
-          todayTask: '변전소 EMS 그리드 연동 시험 진행 및 신재생 센서 데이터 수신 점검',
-          tomorrowTask: '그리드 데이터 오차 정밀 검증 및 1차 테스트 결과 보고',
-          status: '진행중',
-          issues: '특이사항 없음',
-          isVacationToday: false,
-          isVacationTomorrow: false,
-          sourceFileName: `${dateCode} 그리드팀 업무 공유.xlsx`,
-          updatedAt: new Date().toISOString(),
-        },
-        {
-          id: `rep-sync-${Date.now()}-2`,
-          date: dateStr,
-          displayDate: displayDateStr,
-          department: '전력사업부문',
-          team: '그리드팀',
-          author: '이영희 수석',
-          todayTask: '스마트 그리드 분배 알고리즘 파이프라인 최적화 완료',
-          tomorrowTask: '전력 피크 타임 예측 알고리즘 성능 모니터링',
-          status: '완료',
-          issues: '없음',
-          isVacationToday: false,
-          isVacationTomorrow: false,
-          sourceFileName: `${dateCode} 그리드팀 업무 공유.xlsx`,
-          updatedAt: new Date().toISOString(),
-        },
-        {
-          id: `rep-sync-${Date.now()}-3`,
-          date: dateStr,
-          displayDate: displayDateStr,
-          department: 'IT개발부문',
-          team: '개발팀',
-          author: '정우성 팀장',
-          todayTask: '업무 보고 통합 시스템 모니터링 및 DB 파이프라인 수립',
-          tomorrowTask: '실시간 업데이트 모듈 권한 및 보안 검증',
-          status: '완료',
-          issues: '특이사항 없음',
-          isVacationToday: false,
-          isVacationTomorrow: false,
-          sourceFileName: `${dateCode} 개발팀 업무 공유.xlsx`,
-          updatedAt: new Date().toISOString(),
-        },
-        {
-          id: `rep-sync-${Date.now()}-4`,
-          date: dateStr,
-          displayDate: displayDateStr,
-          department: '서비스운영부문',
-          team: '운영팀',
-          author: '유재석 선임',
-          todayTask: '운영 서버 백업 확인 및 일일 장애 모니터링',
-          tomorrowTask: '정기 보안점검 보고서 작성',
-          status: '완료',
-          issues: '-',
-          isVacationToday: false,
-          isVacationTomorrow: false,
-          sourceFileName: `${dateCode} 운영팀 업무 공유.xlsx`,
-          updatedAt: new Date().toISOString(),
-        },
-      ];
-
-      setReports((prev) => {
-        // filter out existing items with same id if any
-        const filteredPrev = prev.filter((item) => item.date !== dateStr);
-        return [...newItems, ...filteredPrev];
-      });
-
-      const newHistoryFiles = [
-        `${dateCode} 그리드팀 업무 공유.xlsx`,
-        `${dateCode} 개발팀 업무 공유.xlsx`,
-        `${dateCode} 운영팀 업무 공유.xlsx`,
-      ];
-
-      setImportedFilesHistory((prev) => {
-        const setFiles = new Set([...newHistoryFiles, ...prev]);
-        return Array.from(setFiles);
-      });
-
       const nowStr = new Date().toLocaleTimeString('ko-KR');
       setLastSyncTime(nowStr);
-      setSelectedDate(dateStr);
       setIsUpdating(false);
 
-      showToast(`✅ 감시 폴더(${folderPath}) 수집 완료: ${newItems.length}건의 실제 일지 데이터가 수집되었습니다!`);
+      if (reports.length === 0) {
+        showToast(`ℹ️ 감시 폴더(${folderPath}) 및 하위 폴더 탐색 완료: 읽어올 신규 엑셀 파일이 없습니다. [엑셀 파일 수동 업로드] 탭에서 폴더 또는 .xlsx 파일을 선택해 주세요.`);
+      } else {
+        showToast(`✅ 감시 폴더(${folderPath}) 및 하위 폴더 최신화 동기화 완료! (총 ${reports.length}건)`);
+      }
     }, 1000);
   };
 
   // Import uploaded custom files
-  const handleImportReports = (newReports: WorkReportItem[]) => {
-    setReports((prev) => [...newReports, ...prev]);
-    const fileNames = Array.from(new Set(newReports.map((r) => r.sourceFileName || '업로드파일.xlsx')));
-    setImportedFilesHistory((prev) => [...fileNames, ...prev]);
+  const handleImportReports = (newReports: WorkReportItem[], fileNames?: string[]) => {
+    if (newReports.length > 0) {
+      setReports((prev) => {
+        const existingIds = new Set(prev.map((r) => r.id));
+        const uniqueNew = newReports.filter((r) => !existingIds.has(r.id));
+        return [...uniqueNew, ...prev];
+      });
+    }
+
+    const importedNames = fileNames && fileNames.length > 0 
+      ? fileNames 
+      : Array.from(new Set(newReports.map((r) => r.sourceFileName).filter((f): f is string => Boolean(f))));
+
+    if (importedNames.length > 0) {
+      setImportedFilesHistory((prev) => {
+        const combined = new Set([...importedNames, ...prev]);
+        return Array.from(combined);
+      });
+    }
+
     const nowStr = new Date().toLocaleTimeString('ko-KR');
     setLastSyncTime(nowStr);
-    showToast(`✅ ${newReports.length}건의 신규 업무일지가 수집되었습니다!`);
+    showToast(`✅ ${importedNames.length}개 파일 (${newReports.length}건) 업무일지가 성공적으로 동기화되었습니다!`);
   };
 
   const showToast = (msg: string) => {
