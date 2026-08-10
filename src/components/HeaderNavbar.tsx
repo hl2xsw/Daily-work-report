@@ -21,6 +21,8 @@ interface HeaderNavbarProps {
   totalReportCount: number;
   autoSyncEnabled: boolean;
   setAutoSyncEnabled: (val: boolean) => void;
+  autoSyncTime: string;
+  setAutoSyncTime: (val: string) => void;
   nextSyncTimeStr: string;
 }
 
@@ -33,6 +35,8 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
   totalReportCount,
   autoSyncEnabled,
   setAutoSyncEnabled,
+  autoSyncTime,
+  setAutoSyncTime,
   nextSyncTimeStr,
 }) => {
   const [currentTime, setCurrentTime] = useState<string>('');
@@ -73,17 +77,28 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
           </span>
         </div>
 
-        {/* 18:00 Auto Update Status */}
-        <div className="flex items-center space-x-3 mt-1 sm:mt-0">
-          <label className="flex items-center space-x-1.5 cursor-pointer hover:text-slate-200 transition">
+        {/* Configurable Auto Update Status */}
+        <div className="flex items-center space-x-2 mt-1 sm:mt-0 text-slate-300">
+          <label className="flex items-center space-x-1.5 cursor-pointer hover:text-slate-100 transition">
             <input
               type="checkbox"
               checked={autoSyncEnabled}
               onChange={(e) => setAutoSyncEnabled(e.target.checked)}
-              className="rounded border-slate-700 text-emerald-500 focus:ring-emerald-500 bg-slate-800 w-3.5 h-3.5"
+              className="rounded border-slate-700 text-emerald-500 focus:ring-emerald-500 bg-slate-800 w-3.5 h-3.5 cursor-pointer"
             />
-            <span>매일 18:00 자동 업데이트</span>
+            <span>매일</span>
           </label>
+          <div className="flex items-center space-x-1 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5">
+            <Clock className="w-3 h-3 text-emerald-400" />
+            <input
+              type="time"
+              value={autoSyncTime}
+              onChange={(e) => setAutoSyncTime(e.target.value || '17:30')}
+              className="bg-transparent text-emerald-400 font-mono font-bold text-xs focus:outline-none cursor-pointer"
+              title="자동 업데이트 시간 변경"
+            />
+          </div>
+          <span>자동 업데이트</span>
           <span className="bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 px-2 py-0.5 rounded text-[11px] font-mono flex items-center gap-1">
             <Bell className="w-3 h-3 text-emerald-400 animate-pulse" />
             {nextSyncTimeStr}
@@ -108,7 +123,7 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              팀별 엑셀 보고서 자동 통합 • 18시 스케줄링 • 휴가자 현황 • 실시간 대시보드
+              팀별 엑셀 보고서 자동 통합 • {autoSyncTime} 스케줄링 • 휴가자 현황 • 실시간 대시보드
             </p>
           </div>
         </div>

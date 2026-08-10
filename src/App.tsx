@@ -28,7 +28,10 @@ export default function App() {
     return localStorage.getItem('last_sync_time') || '-';
   });
   const [autoSyncEnabled, setAutoSyncEnabled] = useState<boolean>(true);
-  const [nextSyncTimeStr, setNextSyncTimeStr] = useState<string>('18:00:00 남음');
+  const [autoSyncTime, setAutoSyncTime] = useState<string>(() => {
+    return localStorage.getItem('auto_sync_time') || '17:30';
+  });
+  const [nextSyncTimeStr, setNextSyncTimeStr] = useState<string>('남음');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const [importedFilesHistory, setImportedFilesHistory] = useState<string[]>(() => {
@@ -57,6 +60,10 @@ export default function App() {
       localStorage.setItem('last_sync_time', lastSyncTime);
     }
   }, [lastSyncTime]);
+
+  useEffect(() => {
+    localStorage.setItem('auto_sync_time', autoSyncTime);
+  }, [autoSyncTime]);
 
   // Unique list of dates
   const availableDates = useMemo(() => {
@@ -141,6 +148,8 @@ export default function App() {
         totalReportCount={reports.length}
         autoSyncEnabled={autoSyncEnabled}
         setAutoSyncEnabled={setAutoSyncEnabled}
+        autoSyncTime={autoSyncTime}
+        setAutoSyncTime={setAutoSyncTime}
         nextSyncTimeStr={nextSyncTimeStr}
       />
 
@@ -170,9 +179,10 @@ export default function App() {
         )}
       </main>
 
-      {/* Requirement 8: Scheduled Daily 18:00 Auto Update Notification */}
+      {/* Scheduled Daily Auto Update Notification */}
       <AutoUpdateTimer
         enabled={autoSyncEnabled}
+        autoSyncTime={autoSyncTime}
         onAutoTriggerUpdate={handleTriggerUpdate}
         setNextSyncTimeStr={setNextSyncTimeStr}
       />
@@ -187,7 +197,7 @@ export default function App() {
 
       {/* Footer */}
       <footer className="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-500">
-        <p>팀별 일일 업무 보고 통합 관리 시스템 • 260803 그리드팀 업무 공유.xlsx 규격 호환 • 매일 18시 자동 동기화</p>
+        <p>팀별 일일 업무 보고 통합 관리 시스템 • 규격 호환 • 매일 {autoSyncTime} 자동 동기화</p>
       </footer>
     </div>
   );

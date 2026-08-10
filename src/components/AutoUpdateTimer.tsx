@@ -3,12 +3,14 @@ import { Bell, CheckCircle2, RefreshCw, Sparkles, Clock } from 'lucide-react';
 
 interface AutoUpdateTimerProps {
   enabled: boolean;
+  autoSyncTime?: string;
   onAutoTriggerUpdate: () => void;
   setNextSyncTimeStr: (str: string) => void;
 }
 
 export const AutoUpdateTimer: React.FC<AutoUpdateTimerProps> = ({
   enabled,
+  autoSyncTime = '17:30',
   onAutoTriggerUpdate,
   setNextSyncTimeStr,
 }) => {
@@ -21,12 +23,16 @@ export const AutoUpdateTimer: React.FC<AutoUpdateTimerProps> = ({
     }
 
     const checkAndSchedule = () => {
+      const parts = autoSyncTime.split(':');
+      const targetHour = parseInt(parts[0], 10) || 17;
+      const targetMinute = parseInt(parts[1], 10) || 30;
+
       const now = new Date();
       const target = new Date();
-      target.setHours(18, 0, 0, 0);
+      target.setHours(targetHour, targetMinute, 0, 0);
 
       if (now > target) {
-        // Next day 18:00
+        // Next day
         target.setDate(target.getDate() + 1);
       }
 
@@ -42,9 +48,9 @@ export const AutoUpdateTimer: React.FC<AutoUpdateTimerProps> = ({
 
       setNextSyncTimeStr(formattedCountdown);
 
-      // If exact 18:00 (within 1 second window)
+      // If exact target time (within 1 second window)
       if (diffMs <= 1000) {
-        setNotification('⏰ [18:00 정기 정시 동기화] 팀별 신규 일일 업무 보고서를 자동 업데이트 하였습니다!');
+        setNotification(`⏰ [${autoSyncTime} 정기 정시 동기화] 팀별 신규 일일 업무 보고서를 자동 업데이트 하였습니다!`);
         onAutoTriggerUpdate();
         setTimeout(() => setNotification(null), 8000);
       }
@@ -53,7 +59,7 @@ export const AutoUpdateTimer: React.FC<AutoUpdateTimerProps> = ({
     checkAndSchedule();
     const interval = setInterval(checkAndSchedule, 1000);
     return () => clearInterval(interval);
-  }, [enabled, onAutoTriggerUpdate, setNextSyncTimeStr]);
+  }, [enabled, autoSyncTime, onAutoTriggerUpdate, setNextSyncTimeStr]);
 
   if (!notification) return null;
 
@@ -66,7 +72,7 @@ export const AutoUpdateTimer: React.FC<AutoUpdateTimerProps> = ({
         <div className="flex-1">
           <h4 className="text-sm font-bold text-emerald-400 flex items-center gap-1.5">
             <Sparkles className="w-4 h-4" />
-            매일 18:00 자동 업데이트 실행 완료
+            매일 {autoSyncTime} 자동 업데이트 실행 완료
           </h4>
           <p className="text-xs text-slate-200 mt-1 leading-snug">{notification}</p>
         </div>

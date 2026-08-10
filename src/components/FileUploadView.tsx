@@ -116,7 +116,7 @@ export const FileUploadView: React.FC<FileUploadViewProps> = ({
               <span>특정 폴더 및 하위 폴더 자동 감시 경로</span>
             </div>
             <p className="text-xs text-slate-400 mb-4">
-              지정된 감시 폴더 및 <strong>하위 폴더(Subdirectories) 전체</strong>를 스캔하여 매 18:00 또는 수동 업데이트 시 동기화합니다.
+              지정된 감시 폴더 및 <strong>하위 폴더(Subdirectories) 전체</strong>를 스캔하여 설정된 정기 시간(기본 17:30) 또는 수동 업데이트 시 동기화합니다.
             </p>
 
             <div className="space-y-3">
