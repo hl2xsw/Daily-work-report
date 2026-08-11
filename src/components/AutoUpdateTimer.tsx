@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Bell, Sparkles } from 'lucide-react';
 
 interface AutoUpdateTimerProps {
@@ -15,7 +15,7 @@ export const AutoUpdateTimer: React.FC<AutoUpdateTimerProps> = ({
   setNextSyncTimeStr,
 }) => {
   const [notification, setNotification] = useState<string | null>(null);
-  const [lastTriggeredKey, setLastTriggeredKey] = useState<string>('');
+  const triggeredRef = useRef<string>(localStorage.getItem('last_triggered_sync_key') || '');
 
   useEffect(() => {
     if (!enabled) {
@@ -57,8 +57,9 @@ export const AutoUpdateTimer: React.FC<AutoUpdateTimerProps> = ({
         setNextSyncTimeStr(formattedCountdown);
 
         // Trigger if target time is reached (within 2 seconds window) and hasn't fired for this target today
-        if (diffMs <= 2000 && lastTriggeredKey !== currentTriggerKey) {
-          setLastTriggeredKey(currentTriggerKey);
+        if (diffMs <= 2000 && triggeredRef.current !== currentTriggerKey) {
+          triggeredRef.current = currentTriggerKey;
+          localStorage.setItem('last_triggered_sync_key', currentTriggerKey);
           setNotification(`⏰ [${autoSyncTime} 정기 정시 동기화] 감시 폴더 신규 일일 업무 보고서를 자동 수집 및 동기화하였습니다!`);
           onAutoTriggerUpdate();
           setTimeout(() => setNotification(null), 8000);
@@ -71,7 +72,7 @@ export const AutoUpdateTimer: React.FC<AutoUpdateTimerProps> = ({
     checkAndSchedule();
     const interval = setInterval(checkAndSchedule, 1000);
     return () => clearInterval(interval);
-  }, [enabled, autoSyncTime, lastTriggeredKey, onAutoTriggerUpdate, setNextSyncTimeStr]);
+  }, [enabled, autoSyncTime, onAutoTriggerUpdate, setNextSyncTimeStr]);
 
   if (!notification) return null;
 

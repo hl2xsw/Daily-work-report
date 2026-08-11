@@ -237,8 +237,12 @@ export async function parseExcelFile(file: File): Promise<WorkReportItem[]> {
       else vacationTypeTomorrow = '연차';
     }
 
+    const cleanAuthor = author.replace(/\s+/g, '');
+    const cleanFile = (file.name || '').replace(/[^a-zA-Z0-9가-힣]/g, '');
+    const deterministicId = `rep-${meta.date}-${finalTeamName}-${cleanAuthor}-${i}-${cleanFile}`;
+
     parsedItems.push({
-      id: `rep-up-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 4)}`,
+      id: deterministicId,
       date: meta.date,
       displayDate: meta.displayDate,
       department: 'EV Innovation 부문',

@@ -78,17 +78,93 @@ export default function App() {
     }
   }, [availableDates, selectedDate]);
 
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 4500);
+  };
+
+  // Import uploaded custom files with strict file & row deduplication
+  const handleImportReports = React.useCallback((newReports: WorkReportItem[], fileNames?: string[]) => {
+    const existingFileSet = new Set(importedFilesHistory);
+    const existingIds = new Set(reports.map((r) => r.id));
+    const existingCompositeKeys = new Set(
+      reports.map((r) => `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim())
+    );
+
+    // Filter out reports that already exist by ID or composite key
+    const filteredReports = newReports.filter((r) => {
+      if (existingIds.has(r.id)) return false;
+      const key = `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim();
+      if (existingCompositeKeys.has(key)) return false;
+      return true;
+    });
+
+    const candidateFileNames = fileNames && fileNames.length > 0 
+      ? fileNames 
+      : Array.from(new Set(newReports.map((r) => r.sourceFileName).filter((f): f is string => Boolean(f))));
+
+    const newFileNames = candidateFileNames.filter((fn) => !existingFileSet.has(fn));
+
+    if (filteredReports.length > 0) {
+      setReports((prev) => {
+        const prevIds = new Set(prev.map((r) => r.id));
+        const prevKeys = new Set(prev.map((r) => `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim()));
+        const trulyNew = filteredReports.filter((r) => {
+          if (prevIds.has(r.id)) return false;
+          const key = `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim();
+          if (prevKeys.has(key)) return false;
+          return true;
+        });
+        return [...trulyNew, ...prev];
+      });
+    }
+
+    if (candidateFileNames.length > 0) {
+      setImportedFilesHistory((prev) => {
+        const combined = new Set([...candidateFileNames, ...prev]);
+        return Array.from(combined);
+      });
+    }
+
+    const nowStr = new Date().toLocaleTimeString('ko-KR');
+    setLastSyncTime(nowStr);
+
+    if (filteredReports.length > 0) {
+      showToast(`✅ ${candidateFileNames.length}개 파일 중 ${newFileNames.length}개 신규 파일 (${filteredReports.length}건 업무일지) 수집 완료!`);
+    } else {
+      showToast(`ℹ️ 기존에 이미 읽어온 업무일지 파일입니다. (중복 데이터 제외)`);
+    }
+
+    return {
+      addedReportsCount: filteredReports.length,
+      newFilesCount: newFileNames.length,
+    };
+  }, [importedFilesHistory, reports]);
+
   // Manual & Auto Update Action from watched folder
-  const handleTriggerUpdate = async () => {
+  const handleTriggerUpdate = React.useCallback(async () => {
     setIsUpdating(true);
     const folderPath = localStorage.getItem('watched_folder_path') || 'D:\\Data_JAC\\_EV Innovation 부문\\업무일지\\8월';
     showToast(`🔄 감시 폴더(${folderPath}) 스캔 및 신규 파일 동기화 진행 중...`);
 
     try {
       const result = await performFolderScan();
-      if (!result.needFolderPermission && result.reports.length > 0) {
-        handleImportReports(result.reports, result.fileNames);
-        showToast(`✅ [${result.scannedFolderName || '감시 폴더'}] 자동 스캔 완료! ${result.fileNames.length}개 파일 (${result.reports.length}건) 업무일지 수집됨`);
+      if (!result.needFolderPermission) {
+        // Filter files that are already imported
+        const existingFileSet = new Set(importedFilesHistory);
+        const unimportedFiles = result.fileNames.filter((fn) => !existingFileSet.has(fn));
+        const unimportedReports = result.reports.filter((r) => !r.sourceFileName || !existingFileSet.has(r.sourceFileName));
+
+        if (unimportedReports.length > 0 || unimportedFiles.length > 0) {
+          const importRes = handleImportReports(unimportedReports, unimportedFiles);
+          if (importRes.addedReportsCount === 0) {
+            showToast(`✅ [${result.scannedFolderName || '감시 폴더'}] 동기화 완료: 기존에 읽어온 업무일지 파일입니다. (신규 추가 건수 0건)`);
+          }
+        } else {
+          showToast(`✅ [${result.scannedFolderName || '감시 폴더'}] 동기화 완료: 기존에 이미 읽어온 업무일지 파일입니다. (신규 파일 없음)`);
+        }
       } else {
         showToast(`📁 [업로드/동기화] 탭에서 [감시 폴더 선택 & 승인]을 완료하시면 매일 ${autoSyncTime}에 자동으로 수집됩니다.`);
         setActiveTab('upload');
@@ -102,7 +178,7 @@ export default function App() {
       setLastSyncTime(nowStr);
       setIsUpdating(false);
     }
-  };
+  }, [importedFilesHistory, handleImportReports, autoSyncTime]);
 
   // Clear all data manually if user wants a clean slate
   const handleClearAllData = () => {
@@ -114,39 +190,6 @@ export default function App() {
       setSelectedDate('');
       showToast('🧹 모든 업무일지 데이터와 수집 이력이 초기화되었습니다.');
     }
-  };
-
-  // Import uploaded custom files
-  const handleImportReports = (newReports: WorkReportItem[], fileNames?: string[]) => {
-    if (newReports.length > 0) {
-      setReports((prev) => {
-        const existingIds = new Set(prev.map((r) => r.id));
-        const uniqueNew = newReports.filter((r) => !existingIds.has(r.id));
-        return [...uniqueNew, ...prev];
-      });
-    }
-
-    const importedNames = fileNames && fileNames.length > 0 
-      ? fileNames 
-      : Array.from(new Set(newReports.map((r) => r.sourceFileName).filter((f): f is string => Boolean(f))));
-
-    if (importedNames.length > 0) {
-      setImportedFilesHistory((prev) => {
-        const combined = new Set([...importedNames, ...prev]);
-        return Array.from(combined);
-      });
-    }
-
-    const nowStr = new Date().toLocaleTimeString('ko-KR');
-    setLastSyncTime(nowStr);
-    showToast(`✅ ${importedNames.length}개 파일 (${newReports.length}건) 업무일지가 성공적으로 동기화되었습니다!`);
-  };
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 4500);
   };
 
   return (
