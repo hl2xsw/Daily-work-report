@@ -6,7 +6,8 @@ import { ReportTableView } from './components/ReportTableView';
 import { SearchView } from './components/SearchView';
 import { FileUploadView } from './components/FileUploadView';
 import { AutoUpdateTimer } from './components/AutoUpdateTimer';
-import { Sparkles, CheckCircle2, AlertCircle } from 'lucide-react';
+import { performFolderScan } from './utils/folderScanner';
+import { CheckCircle2 } from 'lucide-react';
 
 export default function App() {
   const [reports, setReports] = useState<WorkReportItem[]>(() => {
@@ -78,17 +79,29 @@ export default function App() {
   }, [availableDates, selectedDate]);
 
   // Manual & Auto Update Action from watched folder
-  const handleTriggerUpdate = () => {
-    const folderPath = localStorage.getItem('watched_folder_path') || 'D:\\Data_JAC\\_EV Innovation 부문\\업무일지\\8월';
+  const handleTriggerUpdate = async () => {
     setIsUpdating(true);
-    showToast(`🔄 감시 폴더(${folderPath}) 및 하위 폴더 전체 스캔을 위해 [업로드/동기화] 탭으로 이동합니다.`);
+    const folderPath = localStorage.getItem('watched_folder_path') || 'D:\\Data_JAC\\_EV Innovation 부문\\업무일지\\8월';
+    showToast(`🔄 감시 폴더(${folderPath}) 스캔 및 신규 파일 동기화 진행 중...`);
 
-    setTimeout(() => {
+    try {
+      const result = await performFolderScan();
+      if (!result.needFolderPermission && result.reports.length > 0) {
+        handleImportReports(result.reports, result.fileNames);
+        showToast(`✅ [${result.scannedFolderName || '감시 폴더'}] 자동 스캔 완료! ${result.fileNames.length}개 파일 (${result.reports.length}건) 업무일지 수집됨`);
+      } else {
+        showToast(`📁 [업로드/동기화] 탭에서 [감시 폴더 선택 & 승인]을 완료하시면 매일 ${autoSyncTime}에 자동으로 수집됩니다.`);
+        setActiveTab('upload');
+      }
+    } catch (err: any) {
+      console.error('Auto folder scan failed:', err);
+      showToast(`📁 [업로드/동기화] 탭에서 감시 폴더를 선택하고 권한을 승인해 주세요.`);
+      setActiveTab('upload');
+    } finally {
       const nowStr = new Date().toLocaleTimeString('ko-KR');
       setLastSyncTime(nowStr);
       setIsUpdating(false);
-      setActiveTab('upload');
-    }, 600);
+    }
   };
 
   // Clear all data manually if user wants a clean slate

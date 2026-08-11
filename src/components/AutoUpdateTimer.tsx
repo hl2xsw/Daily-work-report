@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Bell, CheckCircle2, RefreshCw, Sparkles, Clock } from 'lucide-react';
+import { Bell, Sparkles } from 'lucide-react';
 
 interface AutoUpdateTimerProps {
   enabled: boolean;
@@ -15,6 +15,7 @@ export const AutoUpdateTimer: React.FC<AutoUpdateTimerProps> = ({
   setNextSyncTimeStr,
 }) => {
   const [notification, setNotification] = useState<string | null>(null);
+  const [lastTriggeredKey, setLastTriggeredKey] = useState<string>('');
 
   useEffect(() => {
     if (!enabled) {
@@ -23,43 +24,54 @@ export const AutoUpdateTimer: React.FC<AutoUpdateTimerProps> = ({
     }
 
     const checkAndSchedule = () => {
-      const parts = autoSyncTime.split(':');
+      const parts = (autoSyncTime || '17:30').split(':');
       const targetHour = parseInt(parts[0], 10) || 17;
       const targetMinute = parseInt(parts[1], 10) || 30;
 
       const now = new Date();
+
+      // Create target time object for today
       const target = new Date();
       target.setHours(targetHour, targetMinute, 0, 0);
 
-      if (now > target) {
-        // Next day
+      const todayDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const currentTriggerKey = `${todayDateStr}_${targetHour}:${targetMinute}`;
+
+      // If today's target time has passed by more than 2 seconds, schedule for tomorrow
+      if (now.getTime() >= target.getTime() + 2000) {
         target.setDate(target.getDate() + 1);
       }
 
       const diffMs = target.getTime() - now.getTime();
-      const hours = Math.floor(diffMs / (1000 * 60 * 60));
-      const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-      const secs = Math.floor((diffMs % (1000 * 60)) / 1000);
 
-      const formattedCountdown = `${String(hours).padStart(2, '0')}:${String(mins).padStart(
-        2,
-        '0'
-      )}:${String(secs).padStart(2, '0')} 남음`;
+      if (diffMs > 0) {
+        const hours = Math.floor(diffMs / (1000 * 60 * 60));
+        const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+        const secs = Math.floor((diffMs % (1000 * 60)) / 1000);
 
-      setNextSyncTimeStr(formattedCountdown);
+        const formattedCountdown = `${String(hours).padStart(2, '0')}:${String(mins).padStart(
+          2,
+          '0'
+        )}:${String(secs).padStart(2, '0')} 남음`;
 
-      // If exact target time (within 1 second window)
-      if (diffMs <= 1000) {
-        setNotification(`⏰ [${autoSyncTime} 정기 정시 동기화] 팀별 신규 일일 업무 보고서를 자동 업데이트 하였습니다!`);
-        onAutoTriggerUpdate();
-        setTimeout(() => setNotification(null), 8000);
+        setNextSyncTimeStr(formattedCountdown);
+
+        // Trigger if target time is reached (within 2 seconds window) and hasn't fired for this target today
+        if (diffMs <= 2000 && lastTriggeredKey !== currentTriggerKey) {
+          setLastTriggeredKey(currentTriggerKey);
+          setNotification(`⏰ [${autoSyncTime} 정기 정시 동기화] 감시 폴더 신규 일일 업무 보고서를 자동 수집 및 동기화하였습니다!`);
+          onAutoTriggerUpdate();
+          setTimeout(() => setNotification(null), 8000);
+        }
+      } else {
+        setNextSyncTimeStr('동기화 진행 중...');
       }
     };
 
     checkAndSchedule();
     const interval = setInterval(checkAndSchedule, 1000);
     return () => clearInterval(interval);
-  }, [enabled, autoSyncTime, onAutoTriggerUpdate, setNextSyncTimeStr]);
+  }, [enabled, autoSyncTime, lastTriggeredKey, onAutoTriggerUpdate, setNextSyncTimeStr]);
 
   if (!notification) return null;
 
