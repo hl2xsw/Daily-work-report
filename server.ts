@@ -53,11 +53,19 @@ async function startServer() {
   });
 
   // Serve static / SPA frontend
-  if (process.env.NODE_ENV === "production") {
-    const distPath = path.join(process.cwd(), "dist");
+  const distPath = path.join(process.cwd(), "dist");
+  if (fs.existsSync(distPath)) {
     app.use(express.static(distPath));
-    app.use("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    app.get("*", (req, res) => {
+      const indexPath = path.join(distPath, "index.html");
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        res.status(404).send("Application build not found. Please run build.");
+      }
     });
   } else {
     const vite = await createViteServer({
@@ -65,22 +73,6 @@ async function startServer() {
       appType: "spa",
     });
     app.use(vite.middlewares);
-    app.use("*", async (req, res, next) => {
-      const url = req.originalUrl;
-      try {
-        const indexPath = path.resolve(process.cwd(), "index.html");
-        if (fs.existsSync(indexPath)) {
-          let template = fs.readFileSync(indexPath, "utf-8");
-          template = await vite.transformIndexHtml(url, template);
-          res.status(200).set({ "Content-Type": "text/html" }).end(template);
-        } else {
-          next();
-        }
-      } catch (e) {
-        vite.ssrFixStacktrace(e as Error);
-        next(e);
-      }
-    });
   }
 
   app.listen(PORT, "0.0.0.0", () => {
