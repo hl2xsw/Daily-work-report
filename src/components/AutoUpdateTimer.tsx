@@ -4,7 +4,7 @@ import { Bell, Sparkles } from 'lucide-react';
 interface AutoUpdateTimerProps {
   enabled: boolean;
   autoSyncTime?: string;
-  onAutoTriggerUpdate: () => void;
+  onAutoTriggerUpdate: () => Promise<void> | void;
   setNextSyncTimeStr: (str: string) => void;
 }
 
@@ -23,27 +23,29 @@ export const AutoUpdateTimer: React.FC<AutoUpdateTimerProps> = ({
       return;
     }
 
-    const checkAndSchedule = () => {
+    const checkAndSchedule = async () => {
       const parts = (autoSyncTime || '17:30').split(':');
       const targetHour = parseInt(parts[0], 10) || 17;
       const targetMinute = parseInt(parts[1], 10) || 30;
 
       const now = new Date();
 
-      // Create target time object for today
-      const target = new Date();
-      target.setHours(targetHour, targetMinute, 0, 0);
+      // Today's target Date object
+      const targetToday = new Date();
+      targetToday.setHours(targetHour, targetMinute, 0, 0);
 
       const todayDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-      const currentTriggerKey = `${todayDateStr}_${targetHour}:${targetMinute}`;
+      const currentTriggerKey = `${todayDateStr}_${String(targetHour).padStart(2, '0')}:${String(targetMinute).padStart(2, '0')}`;
 
-      // If today's target time has passed by more than 2 seconds, schedule for tomorrow
-      if (now.getTime() >= target.getTime() + 2000) {
-        target.setDate(target.getDate() + 1);
+      // Calculate countdown target time
+      let countdownTarget = new Date(targetToday);
+      if (now.getTime() >= targetToday.getTime()) {
+        // If today's target time has passed, next target is tomorrow
+        countdownTarget.setDate(countdownTarget.getDate() + 1);
       }
 
-      const diffMs = target.getTime() - now.getTime();
-
+      // Format remaining countdown time
+      const diffMs = countdownTarget.getTime() - now.getTime();
       if (diffMs > 0) {
         const hours = Math.floor(diffMs / (1000 * 60 * 60));
         const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
@@ -55,17 +57,29 @@ export const AutoUpdateTimer: React.FC<AutoUpdateTimerProps> = ({
         )}:${String(secs).padStart(2, '0')} 남음`;
 
         setNextSyncTimeStr(formattedCountdown);
-
-        // Trigger if target time is reached (within 2 seconds window) and hasn't fired for this target today
-        if (diffMs <= 2000 && triggeredRef.current !== currentTriggerKey) {
-          triggeredRef.current = currentTriggerKey;
-          localStorage.setItem('last_triggered_sync_key', currentTriggerKey);
-          setNotification(`⏰ [${autoSyncTime} 정기 정시 동기화] 감시 폴더 신규 일일 업무 보고서를 자동 수집 및 동기화하였습니다!`);
-          onAutoTriggerUpdate();
-          setTimeout(() => setNotification(null), 8000);
-        }
       } else {
         setNextSyncTimeStr('동기화 진행 중...');
+      }
+
+      // Trigger condition:
+      // Current time is past today's target time, within 12 hours, and hasn't triggered for this key yet
+      const timeSinceTarget = now.getTime() - targetToday.getTime();
+      if (
+        now.getTime() >= targetToday.getTime() &&
+        timeSinceTarget < 12 * 60 * 60 * 1000 &&
+        triggeredRef.current !== currentTriggerKey
+      ) {
+        triggeredRef.current = currentTriggerKey;
+        localStorage.setItem('last_triggered_sync_key', currentTriggerKey);
+        setNotification(`⏰ [${autoSyncTime} 정시 동기화] 감시 폴더 신규 업무일지 수집을 실행합니다...`);
+
+        try {
+          await onAutoTriggerUpdate();
+        } catch (err) {
+          console.error('Auto sync trigger error:', err);
+        }
+
+        setTimeout(() => setNotification(null), 8000);
       }
     };
 
@@ -85,7 +99,7 @@ export const AutoUpdateTimer: React.FC<AutoUpdateTimerProps> = ({
         <div className="flex-1">
           <h4 className="text-sm font-bold text-emerald-400 flex items-center gap-1.5">
             <Sparkles className="w-4 h-4" />
-            매일 {autoSyncTime} 자동 업데이트 실행 완료
+            매일 {autoSyncTime} 정시 동기화 실행
           </h4>
           <p className="text-xs text-slate-200 mt-1 leading-snug">{notification}</p>
         </div>

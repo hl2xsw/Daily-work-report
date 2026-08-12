@@ -152,33 +152,28 @@ export default function App() {
     try {
       const result = await performFolderScan();
       if (!result.needFolderPermission) {
-        // Filter files that are already imported
-        const existingFileSet = new Set(importedFilesHistory);
-        const unimportedFiles = result.fileNames.filter((fn) => !existingFileSet.has(fn));
-        const unimportedReports = result.reports.filter((r) => !r.sourceFileName || !existingFileSet.has(r.sourceFileName));
-
-        if (unimportedReports.length > 0 || unimportedFiles.length > 0) {
-          const importRes = handleImportReports(unimportedReports, unimportedFiles);
+        if (result.reports.length > 0 || result.fileNames.length > 0) {
+          const importRes = handleImportReports(result.reports, result.fileNames);
           if (importRes.addedReportsCount === 0) {
-            showToast(`✅ [${result.scannedFolderName || '감시 폴더'}] 동기화 완료: 기존에 읽어온 업무일지 파일입니다. (신규 추가 건수 0건)`);
+            showToast(`✅ [${result.scannedFolderName || '감시 폴더'}] 동기화 완료: 기존에 읽어온 파일입니다. (신규 데이터 0건)`);
           }
         } else {
-          showToast(`✅ [${result.scannedFolderName || '감시 폴더'}] 동기화 완료: 기존에 이미 읽어온 업무일지 파일입니다. (신규 파일 없음)`);
+          showToast(`ℹ️ [${result.scannedFolderName || '감시 폴더'}] 폴더에 엑셀 업무일지 파일이 존재하지 않습니다.`);
         }
       } else {
-        showToast(`📁 [업로드/동기화] 탭에서 [감시 폴더 선택 & 승인]을 완료하시면 매일 ${autoSyncTime}에 자동으로 수집됩니다.`);
+        showToast(`📁 [엑셀 파일 관리 & 폴더 감시] 탭에서 [감시 폴더 선택 & 권한 승인]을 해 주시면 매일 ${autoSyncTime}에 자동 수집됩니다.`);
         setActiveTab('upload');
       }
     } catch (err: any) {
       console.error('Auto folder scan failed:', err);
-      showToast(`📁 [업로드/동기화] 탭에서 감시 폴더를 선택하고 권한을 승인해 주세요.`);
+      showToast(`📁 [엑셀 파일 관리 & 폴더 감시] 탭에서 감시 폴더를 선택하고 권한을 승인해 주세요.`);
       setActiveTab('upload');
     } finally {
       const nowStr = new Date().toLocaleTimeString('ko-KR');
       setLastSyncTime(nowStr);
       setIsUpdating(false);
     }
-  }, [importedFilesHistory, handleImportReports, autoSyncTime]);
+  }, [handleImportReports, autoSyncTime]);
 
   // Clear all data manually if user wants a clean slate
   const handleClearAllData = () => {
