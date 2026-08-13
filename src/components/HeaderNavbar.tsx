@@ -15,14 +15,12 @@ import {
   Check,
   X,
   Settings,
-  Smartphone,
 } from 'lucide-react';
 
 interface HeaderNavbarProps {
   activeTab: 'dashboard' | 'table' | 'search' | 'upload';
   setActiveTab: (tab: 'dashboard' | 'table' | 'search' | 'upload') => void;
   onManualUpdate: () => void;
-  onSyncToMobile?: () => void;
   isUpdating: boolean;
   lastSyncTime: string;
   totalReportCount: number;
@@ -37,7 +35,6 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
   activeTab,
   setActiveTab,
   onManualUpdate,
-  onSyncToMobile,
   isUpdating,
   lastSyncTime,
   totalReportCount,
@@ -292,18 +289,6 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
 
         {/* Action Buttons */}
         <div className="flex items-center space-x-2.5 self-end md:self-auto">
-          {onSyncToMobile && (
-            <button
-              type="button"
-              onClick={onSyncToMobile}
-              className="flex items-center space-x-1.5 px-3.5 py-2 text-xs font-bold rounded-lg text-emerald-300 bg-emerald-950/80 border border-emerald-700/80 hover:bg-emerald-900 hover:border-emerald-500 shadow-sm transition-all transform active:scale-95 cursor-pointer"
-              title="PC의 업무일지 데이터를 스마트폰 서버로 즉시 전송 및 동기화합니다."
-            >
-              <Smartphone className="w-4 h-4 text-emerald-400" />
-              <span>📱 스마트폰 동기화 전송</span>
-            </button>
-          )}
-
           {/* Manual Update Button (요구사항 5) */}
           <button
             onClick={onManualUpdate}

@@ -17,7 +17,8 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          // Remove dummy sample reports if present
+          return parsed.filter((r) => r && typeof r.id === 'string' && !r.id.startsWith('sample-'));
         }
       } catch (e) {
         console.error('Failed to load saved reports', e);
@@ -102,8 +103,9 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         const parsedHist = savedHistory ? JSON.parse(savedHistory) : [];
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          pushReportsToServer(parsed, parsedHist, savedSyncTime);
+        const clean = Array.isArray(parsed) ? parsed.filter((r) => r && typeof r.id === 'string' && !r.id.startsWith('sample-')) : [];
+        if (clean.length > 0) {
+          pushReportsToServer(clean, parsedHist, savedSyncTime);
           return;
         }
       } catch (e) {
@@ -115,17 +117,9 @@ export default function App() {
 
   // Periodic polling for smartphones/secondary tabs
   useEffect(() => {
-    const interval = setInterval(fetchServerReports, 10000);
+    const interval = setInterval(fetchServerReports, 5000);
     return () => clearInterval(interval);
   }, [fetchServerReports]);
-
-  // Manual sync trigger button handler for PC users
-  const handleManualSyncToMobile = async () => {
-    const nowStr = new Date().toLocaleTimeString('ko-KR');
-    setLastSyncTime(nowStr);
-    await pushReportsToServer(reports, importedFilesHistory, nowStr);
-    showToast(`📱 PC에 보관된 업무일지 (${reports.length}건)가 스마트폰으로 즉시 동기화되었습니다!`);
-  };
 
   // Save to localStorage whenever data changes
   useEffect(() => {
@@ -255,8 +249,10 @@ export default function App() {
       const nowStr = new Date().toLocaleTimeString('ko-KR');
       setLastSyncTime(nowStr);
       setIsUpdating(false);
+      // Automatically sync latest state to server for mobile devices
+      pushReportsToServer(reports, importedFilesHistory, nowStr);
     }
-  }, [handleImportReports, autoSyncTime]);
+  }, [handleImportReports, autoSyncTime, pushReportsToServer, reports, importedFilesHistory]);
 
   // Clear all data manually if user wants a clean slate
   const handleClearAllData = async () => {
@@ -282,7 +278,6 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onManualUpdate={handleTriggerUpdate}
-        onSyncToMobile={handleManualSyncToMobile}
         isUpdating={isUpdating}
         lastSyncTime={lastSyncTime}
         totalReportCount={reports.length}

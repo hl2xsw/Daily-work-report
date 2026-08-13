@@ -3,7 +3,6 @@ import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
-import { initialSampleReports } from "./src/data/sampleReports";
 
 async function startServer() {
   const app = express();
@@ -19,8 +18,14 @@ async function startServer() {
       if (fs.existsSync(dataFilePath)) {
         const raw = fs.readFileSync(dataFilePath, "utf-8");
         const parsed = JSON.parse(raw);
-        if (parsed && Array.isArray(parsed.reports) && parsed.reports.length > 0) {
-          return parsed;
+        if (parsed && Array.isArray(parsed.reports)) {
+          // Filter out dummy sample data if any remnants exist
+          const cleanReports = parsed.reports.filter((r: any) => r && typeof r.id === 'string' && !r.id.startsWith('sample-'));
+          return {
+            reports: cleanReports,
+            history: Array.isArray(parsed.history) ? parsed.history : [],
+            lastSyncTime: parsed.lastSyncTime || "-"
+          };
         }
       }
     } catch (e) {
@@ -86,7 +91,7 @@ async function startServer() {
       const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
         return res.json({
-          summary: "일일 주요 종합 요약: 금일 그리드팀, 개발팀, 운영팀 주요 업무가 순조롭게 진행되었습니다. 그리드팀 변전소 연동 검증 0.28% 달성, 개발팀 API 및 엑셀 모듈 구축 완료, 운영팀 보안 패치 2.4 적용이 완료되었습니다."
+          summary: "일일 주요 종합 요약: 금일 수집된 팀별 주요 업무 보고가 순조롭게 반영되었습니다. 상세 업무 결과 및 휴가자 현황은 하단 대시보드 및 일지 테이블에서 확인 가능합니다."
         });
       }
 
