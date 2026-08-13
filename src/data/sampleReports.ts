@@ -114,7 +114,8 @@ const generateInitialReports = (): WorkReportItem[] => {
         const sourceFileName = `${dObj.code} ${teamObj.team} 업무 공유.xlsx`;
 
         reports.push({
-          id: `rep-${dObj.date}-${teamObj.team}-${m.name.replace(/\s+/g, '')}-${dIdx}-${mIdx}`,
+          id: `sample-demo-${dObj.date}-${teamObj.team}-${m.name.replace(/\s+/g, '')}-${dIdx}-${mIdx}`,
+          isSample: true,
           date: dObj.date,
           displayDate: dObj.display,
           department: 'EV Innovation 부문',

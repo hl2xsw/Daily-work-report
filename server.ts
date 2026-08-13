@@ -27,8 +27,9 @@ async function startServer() {
   const dataFilePath = path.join(process.cwd(), "work_reports_store.json");
 
   const isSampleReport = (r: any) => {
-    if (!r || typeof r.id !== 'string') return true;
-    if (r.id.startsWith('sample-') || r.id.startsWith('rep-2026-')) return true;
+    if (!r || typeof r !== 'object') return true;
+    if (r.isSample === true) return true;
+    if (typeof r.id === 'string' && r.id.startsWith('sample-demo-')) return true;
     return false;
   };
 
@@ -38,8 +39,8 @@ async function startServer() {
         const raw = fs.readFileSync(dataFilePath, "utf-8");
         const parsed = JSON.parse(raw);
         if (parsed && Array.isArray(parsed.reports)) {
-          const cleanReports = parsed.reports.filter((r: any) => !isSampleReport(r));
-          const cleanHistory = Array.isArray(parsed.history) ? parsed.history.filter((h: any) => typeof h === 'string' && !h.includes('업무 공유.xlsx')) : [];
+          const cleanReports = parsed.reports.filter((r: any) => r && typeof r.id === 'string' && !isSampleReport(r));
+          const cleanHistory = Array.isArray(parsed.history) ? parsed.history.filter((h: any) => typeof h === 'string') : [];
           return {
             reports: cleanReports,
             history: cleanHistory,
@@ -99,7 +100,7 @@ async function startServer() {
       
       // Load current store items first
       store.reports.forEach((r: any) => {
-        if (!isSampleReport(r)) {
+        if (r && typeof r.id === 'string' && !isSampleReport(r)) {
           const key = r.id || `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim();
           existingMap.set(key, r);
         }
@@ -107,7 +108,7 @@ async function startServer() {
 
       // Merge incoming
       reports.forEach((r: any) => {
-        if (!isSampleReport(r)) {
+        if (r && typeof r.id === 'string' && !isSampleReport(r)) {
           const key = r.id || `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim();
           existingMap.set(key, r);
         }
@@ -117,7 +118,7 @@ async function startServer() {
     }
 
     if (Array.isArray(history)) {
-      const historySet = new Set([...store.history, ...history.filter((h: any) => typeof h === 'string' && !h.includes('260812 그리드팀 업무 공유'))]);
+      const historySet = new Set([...store.history, ...history.filter((h: any) => typeof h === 'string')]);
       store.history = Array.from(historySet);
     }
 

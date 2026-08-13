@@ -16,8 +16,9 @@ import { initialSampleReports } from './data/sampleReports';
 import { CheckCircle2 } from 'lucide-react';
 
 const isSampleReportItem = (r: any) => {
-  if (!r || typeof r.id !== 'string') return true;
-  if (r.id.startsWith('sample-') || r.id.startsWith('rep-2026-') || r.id.startsWith('rep-')) return true;
+  if (!r || typeof r !== 'object') return true;
+  if (r.isSample === true) return true;
+  if (typeof r.id === 'string' && r.id.startsWith('sample-demo-')) return true;
   return false;
 };
 
@@ -28,7 +29,7 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed.filter((r) => !isSampleReportItem(r));
+          return parsed.filter((r) => r && typeof r.id === 'string' && !isSampleReportItem(r));
         }
       } catch (e) {
         console.error('Failed to load saved reports', e);
@@ -56,7 +57,7 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed.filter((h: any) => typeof h === 'string' && !h.includes('업무 공유.xlsx'));
+          return parsed.filter((h: any) => typeof h === 'string');
         }
       } catch (e) {
         console.error('Failed to load saved history', e);
@@ -105,11 +106,11 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         if (data && Array.isArray(data.reports)) {
-          const clean = data.reports.filter((r: any) => !isSampleReportItem(r));
+          const clean = data.reports.filter((r: any) => r && typeof r.id === 'string' && !isSampleReportItem(r));
           reportsRef.current = clean;
           setReports(clean);
           if (Array.isArray(data.history)) {
-            const cleanHist = data.history.filter((h: any) => typeof h === 'string' && !h.includes('업무 공유.xlsx'));
+            const cleanHist = data.history.filter((h: any) => typeof h === 'string');
             historyRef.current = cleanHist;
             setImportedFilesHistory(cleanHist);
           }
@@ -135,9 +136,9 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         if (data && Array.isArray(data.reports)) {
-          const cleanServerReports = data.reports.filter((r: any) => !isSampleReportItem(r));
+          const cleanServerReports = data.reports.filter((r: any) => r && typeof r.id === 'string' && !isSampleReportItem(r));
           const cleanHistory = Array.isArray(data.history)
-            ? data.history.filter((h: any) => typeof h === 'string' && !h.includes('업무 공유.xlsx'))
+            ? data.history.filter((h: any) => typeof h === 'string')
             : [];
 
           reportsRef.current = cleanServerReports;
@@ -163,14 +164,14 @@ export default function App() {
         if (res.ok) {
           const data = await res.json();
           if (data && Array.isArray(data.reports)) {
-            const clean = data.reports.filter((r: any) => !isSampleReportItem(r));
-            const cleanHist = Array.isArray(data.history) ? data.history.filter((h: any) => typeof h === 'string' && !h.includes('업무 공유.xlsx')) : [];
+            const clean = data.reports.filter((r: any) => r && typeof r.id === 'string' && !isSampleReportItem(r));
+            const cleanHist = Array.isArray(data.history) ? data.history.filter((h: any) => typeof h === 'string') : [];
             if (mounted) {
               setReports(clean);
               setImportedFilesHistory(cleanHist);
               if (data.lastSyncTime !== undefined) setLastSyncTime(data.lastSyncTime);
             }
-            return;
+            if (clean.length > 0) return;
           }
         }
       } catch (e) {
@@ -186,8 +187,8 @@ export default function App() {
         try {
           const parsed = JSON.parse(saved);
           const parsedHist = savedHistory ? JSON.parse(savedHistory) : [];
-          const clean = Array.isArray(parsed) ? parsed.filter((r) => !isSampleReportItem(r)) : [];
-          const cleanHist = Array.isArray(parsedHist) ? parsedHist.filter((h: any) => typeof h === 'string' && !h.includes('업무 공유.xlsx')) : [];
+          const clean = Array.isArray(parsed) ? parsed.filter((r) => r && typeof r.id === 'string' && !isSampleReportItem(r)) : [];
+          const cleanHist = Array.isArray(parsedHist) ? parsedHist.filter((h: any) => typeof h === 'string') : [];
           if (clean.length > 0) {
             if (mounted) {
               setReports(clean);
@@ -318,13 +319,6 @@ export default function App() {
     };
   }, [pushReportsToServer]);
 
-  // Auto-push to central server whenever reports state contains non-empty items
-  useEffect(() => {
-    if (reports.length > 0) {
-      pushReportsToServer(reports, importedFilesHistory, lastSyncTime);
-    }
-  }, [reports, importedFilesHistory, lastSyncTime, pushReportsToServer]);
-
   // Manual & Auto Update Action from watched folder
   const handleTriggerUpdate = React.useCallback(async () => {
     setIsUpdating(true);
@@ -425,7 +419,12 @@ export default function App() {
 
   // Load sample data on demand
   const handleLoadSampleData = async () => {
-    setReports(initialSampleReports);
+    const activeDemoReports = initialSampleReports.map((r) => ({
+      ...r,
+      isSample: false,
+      id: r.id.replace('sample-demo-', 'demo-'),
+    }));
+    setReports(activeDemoReports);
     const sampleHistory = [
       "260812 그리드팀 업무 공유.xlsx",
       "260812 개발팀 업무 공유.xlsx",
@@ -435,7 +434,7 @@ export default function App() {
     setImportedFilesHistory(sampleHistory);
     const nowStr = new Date().toLocaleTimeString('ko-KR');
     setLastSyncTime(nowStr);
-    await pushReportsToServer(initialSampleReports, sampleHistory, nowStr);
+    await pushReportsToServer(activeDemoReports, sampleHistory, nowStr);
     showToast('💡 샘플 데모 데이터가 수집 및 서버 동기화되었습니다.');
   };
 
