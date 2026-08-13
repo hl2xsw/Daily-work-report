@@ -1,5 +1,77 @@
 {
-  "reports": [],
-  "history": [],
-  "lastSyncTime": "-"
+  "reports": [
+    {
+      "id": "demo-2026-08-12-그리드팀-홍길동-0-0",
+      "date": "2026-08-12",
+      "displayDate": "2026년 08월 12일",
+      "department": "EV Innovation 부문",
+      "team": "그리드팀",
+      "author": "홍길동",
+      "todayTask": "전력망 데이터 수집 모듈 점검 및 API 파이프라인 최적화",
+      "taskResult": "정상 작동 확인 및 버퍼링 15% 개선 (완료)",
+      "tomorrowTask": "그리드 시스템 실시간 패킷 모니터링 구축",
+      "status": "완료",
+      "issues": "없음",
+      "remarks": "-",
+      "sourceFileName": "260812 그리드팀 업무 공유.xlsx",
+      "updatedAt": "2026-08-13T07:09:49.057Z"
+    },
+    {
+      "id": "demo-2026-08-12-개발팀-김철수-0-1",
+      "date": "2026-08-12",
+      "displayDate": "2026년 08월 12일",
+      "department": "EV Innovation 부문",
+      "team": "개발팀",
+      "author": "김철수",
+      "todayTask": "스마트폰 대시보드 실시간 동기화 인터페이스 개발",
+      "taskResult": "REST API 연동 및 자동 갱신 로직 반영 (완료)",
+      "tomorrowTask": "모바일 UI 반응형 레이아웃 세부 검증",
+      "status": "완료",
+      "issues": "없음",
+      "remarks": "-",
+      "sourceFileName": "260812 개발팀 업무 공유.xlsx",
+      "updatedAt": "2026-08-13T07:09:49.057Z"
+    },
+    {
+      "id": "demo-2026-08-12-운영팀-이영희-0-2",
+      "date": "2026-08-12",
+      "displayDate": "2026년 08월 12일",
+      "department": "EV Innovation 부문",
+      "team": "운영팀",
+      "author": "이영희",
+      "todayTask": "운영 서버 로그 수집 프로세스 현황 점검",
+      "taskResult": "트래픽 급증 구간 분석 중 (진행률 70%)",
+      "tomorrowTask": "서버 모니터링 알림 임계치 재설정",
+      "status": "진행중",
+      "issues": "일부 피크 시간대 응답 지연 발생",
+      "remarks": "-",
+      "sourceFileName": "260812 운영팀 업무 공유.xlsx",
+      "updatedAt": "2026-08-13T07:09:49.057Z"
+    },
+    {
+      "id": "demo-2026-08-12-인프라팀-박민수-0-3",
+      "date": "2026-08-12",
+      "displayDate": "2026년 08월 12일",
+      "department": "EV Innovation 부문",
+      "team": "인프라팀",
+      "author": "박민수",
+      "todayTask": "금일 연차 휴가",
+      "taskResult": "휴가",
+      "tomorrowTask": "클라우드 네트워크 방화벽 규칙 재검토",
+      "status": "완료",
+      "issues": "없음",
+      "remarks": "금일 연차",
+      "isVacationToday": true,
+      "vacationTypeToday": "연차",
+      "sourceFileName": "260812 인프라팀 업무 공유.xlsx",
+      "updatedAt": "2026-08-13T07:09:49.057Z"
+    }
+  ],
+  "history": [
+    "260812 그리드팀 업무 공유.xlsx",
+    "260812 개발팀 업무 공유.xlsx",
+    "260812 운영팀 업무 공유.xlsx",
+    "260812 인프라팀 업무 공유.xlsx"
+  ],
+  "lastSyncTime": "AM 7:09:49"
 }

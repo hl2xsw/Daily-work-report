@@ -32,6 +32,8 @@ interface DashboardViewProps {
   selectedDate: string;
   setSelectedDate: (date: string) => void;
   availableDates: string[];
+  onLoadSampleData?: () => void;
+  onGoToUpload?: () => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -39,6 +41,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   selectedDate,
   setSelectedDate,
   availableDates,
+  onLoadSampleData,
+  onGoToUpload,
 }) => {
   // Filter reports for selected date
   const dateReports = useMemo(() => {
@@ -159,13 +163,33 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   return (
     <div className="space-y-6 pb-12">
       {reports.length === 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 flex items-start space-x-3 text-amber-900 shadow-xs">
-          <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-          <div>
-            <h3 className="text-sm font-bold text-amber-900">등록된 동기화 업무보고 데이터가 없습니다</h3>
-            <p className="text-xs text-amber-800 mt-1">
-              현재 수집된 팀별 일지(.xlsx) 데이터가 없습니다. 상단 메뉴의 <strong>[엑셀 파일 수동 업로드]</strong> 탭에서 일지 파일(.xlsx) 또는 폴더(하위 폴더 포함)를 업로드하여 동기화해 주세요.
-            </p>
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 text-amber-900 shadow-xs">
+          <div className="flex items-start space-x-3">
+            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <h3 className="text-sm font-bold text-amber-900">등록된 동기화 업무보고 데이터가 없습니다</h3>
+              <p className="text-xs text-amber-800 mt-1">
+                현재 수집된 팀별 일지(.xlsx) 데이터가 없습니다. 상단 메뉴의 <strong>[엑셀 파일 수동 업로드]</strong> 탭에서 일지 파일(.xlsx) 또는 폴더를 업로드하여 동기화해 주세요.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {onGoToUpload && (
+              <button
+                onClick={onGoToUpload}
+                className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                📂 엑셀 파일 수동 업로드
+              </button>
+            )}
+            {onLoadSampleData && (
+              <button
+                onClick={onLoadSampleData}
+                className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                💡 샘플 데모 데이터 생성 (테스트용)
+              </button>
+            )}
           </div>
         </div>
       )}

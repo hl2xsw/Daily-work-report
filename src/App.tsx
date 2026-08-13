@@ -141,65 +141,128 @@ export default function App() {
             ? data.history.filter((h: any) => typeof h === 'string')
             : [];
 
-          reportsRef.current = cleanServerReports;
-          setReports(cleanServerReports);
-          historyRef.current = cleanHistory;
-          setImportedFilesHistory(cleanHistory);
-          if (data.lastSyncTime !== undefined) {
-            setLastSyncTime(data.lastSyncTime);
+          const current = reportsRef.current;
+          const currentHist = historyRef.current;
+
+          // Case 1: Server has reports, client has none (e.g. smartphone opened link for first time)
+          if (cleanServerReports.length > 0 && current.length === 0) {
+            reportsRef.current = cleanServerReports;
+            setReports(cleanServerReports);
+            historyRef.current = cleanHistory;
+            setImportedFilesHistory(cleanHistory);
+            if (data.lastSyncTime !== undefined && data.lastSyncTime !== '-') {
+              setLastSyncTime(data.lastSyncTime);
+            }
+            return;
+          }
+
+          // Case 2: Client has reports, server has none (e.g. server restarted or not yet populated)
+          if (current.length > 0 && cleanServerReports.length === 0) {
+            pushReportsToServer(current, currentHist, lastSyncTimeRef.current);
+            return;
+          }
+
+          // Case 3: Both have reports -> Smart Merge
+          if (cleanServerReports.length > 0 && current.length > 0) {
+            const mergedMap = new Map<string, WorkReportItem>();
+            cleanServerReports.forEach((r) => {
+              const key = r.id || `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim();
+              mergedMap.set(key, r);
+            });
+            current.forEach((r) => {
+              const key = r.id || `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim();
+              if (!mergedMap.has(key)) {
+                mergedMap.set(key, r);
+              }
+            });
+
+            const mergedList = Array.from(mergedMap.values());
+            const mergedHist = Array.from(new Set([...cleanHistory, ...currentHist]));
+
+            // If server had new items that client didn't have
+            if (cleanServerReports.length > current.length || mergedList.length > current.length) {
+              reportsRef.current = mergedList;
+              setReports(mergedList);
+              historyRef.current = mergedHist;
+              setImportedFilesHistory(mergedHist);
+              if (data.lastSyncTime !== undefined && data.lastSyncTime !== '-') {
+                setLastSyncTime(data.lastSyncTime);
+              }
+            }
           }
         }
       }
     } catch (err) {
       console.warn('Could not fetch from server API:', err);
     }
-  }, []);
+  }, [pushReportsToServer]);
 
-  // Sync on initial mount: Load server reports first
+  // Sync on initial mount: Load server reports + local storage combined
   useEffect(() => {
     let mounted = true;
     const initData = async () => {
+      let serverReports: WorkReportItem[] = [];
+      let serverHist: string[] = [];
+      let serverSyncTime = '-';
+
       try {
         const res = await fetch('/api/reports');
         if (res.ok) {
           const data = await res.json();
           if (data && Array.isArray(data.reports)) {
-            const clean = data.reports.filter((r: any) => r && typeof r.id === 'string' && !isSampleReportItem(r));
-            const cleanHist = Array.isArray(data.history) ? data.history.filter((h: any) => typeof h === 'string') : [];
-            if (mounted) {
-              setReports(clean);
-              setImportedFilesHistory(cleanHist);
-              if (data.lastSyncTime !== undefined) setLastSyncTime(data.lastSyncTime);
-            }
-            if (clean.length > 0) return;
+            serverReports = data.reports.filter((r: any) => r && typeof r.id === 'string' && !isSampleReportItem(r));
+            serverHist = Array.isArray(data.history) ? data.history.filter((h: any) => typeof h === 'string') : [];
+            if (data.lastSyncTime) serverSyncTime = data.lastSyncTime;
           }
         }
       } catch (e) {
         console.warn('Initial server fetch failed, checking local storage:', e);
       }
 
-      // If server was empty, check if PC has local storage
+      // Read local storage
       const saved = localStorage.getItem('work_reports_data');
       const savedHistory = localStorage.getItem('imported_files_history');
       const savedSyncTime = localStorage.getItem('last_sync_time') || '-';
 
+      let localReports: WorkReportItem[] = [];
+      let localHist: string[] = [];
+
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          const parsedHist = savedHistory ? JSON.parse(savedHistory) : [];
-          const clean = Array.isArray(parsed) ? parsed.filter((r) => r && typeof r.id === 'string' && !isSampleReportItem(r)) : [];
-          const cleanHist = Array.isArray(parsedHist) ? parsedHist.filter((h: any) => typeof h === 'string') : [];
-          if (clean.length > 0) {
-            if (mounted) {
-              setReports(clean);
-              setImportedFilesHistory(cleanHist);
-              setLastSyncTime(savedSyncTime);
-            }
-            await pushReportsToServer(clean, cleanHist, savedSyncTime);
-          }
-        } catch (e) {
-          console.error('Error parsing local storage on mount:', e);
-        }
+          localReports = Array.isArray(parsed) ? parsed.filter((r) => r && typeof r.id === 'string' && !isSampleReportItem(r)) : [];
+        } catch (e) {}
+      }
+      if (savedHistory) {
+        try {
+          const parsedH = JSON.parse(savedHistory);
+          localHist = Array.isArray(parsedH) ? parsedH.filter((h: any) => typeof h === 'string') : [];
+        } catch (e) {}
+      }
+
+      // Deduplicated Merge
+      const map = new Map<string, WorkReportItem>();
+      serverReports.forEach((r) => map.set(r.id || `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim(), r));
+      localReports.forEach((r) => {
+        const key = r.id || `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim();
+        if (!map.has(key)) map.set(key, r);
+      });
+
+      const combinedReports = Array.from(map.values());
+      const combinedHist = Array.from(new Set([...serverHist, ...localHist]));
+      const finalSyncTime = serverSyncTime !== '-' ? serverSyncTime : savedSyncTime;
+
+      if (mounted) {
+        reportsRef.current = combinedReports;
+        setReports(combinedReports);
+        historyRef.current = combinedHist;
+        setImportedFilesHistory(combinedHist);
+        if (finalSyncTime !== '-') setLastSyncTime(finalSyncTime);
+      }
+
+      // If local storage had items that were not on server yet, push to server
+      if (combinedReports.length > serverReports.length) {
+        await pushReportsToServer(combinedReports, combinedHist, finalSyncTime);
       }
     };
 
@@ -463,6 +526,8 @@ export default function App() {
             selectedDate={selectedDate}
             setSelectedDate={setSelectedDate}
             availableDates={availableDates}
+            onLoadSampleData={handleLoadSampleData}
+            onGoToUpload={() => setActiveTab('upload')}
           />
         )}
 
