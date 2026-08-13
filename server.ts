@@ -55,18 +55,32 @@ async function startServer() {
 
   // API to save/sync work reports across all devices
   app.post("/api/reports", (req, res) => {
-    const { reports, history, lastSyncTime } = req.body;
+    const { reports, history, lastSyncTime, forceClear } = req.body;
+    let updated = false;
+
     if (Array.isArray(reports)) {
-      store.reports = reports;
+      // Protect existing non-empty store from being overwritten by an empty array from an uninitialized client
+      if (reports.length > 0 || forceClear === true || store.reports.length === 0) {
+        store.reports = reports;
+        updated = true;
+      }
     }
     if (Array.isArray(history)) {
-      store.history = history;
+      if (history.length > 0 || forceClear === true || store.history.length === 0) {
+        store.history = history;
+        updated = true;
+      }
     }
-    if (lastSyncTime) {
+    if (lastSyncTime && lastSyncTime !== '-') {
       store.lastSyncTime = lastSyncTime;
+      updated = true;
     }
-    saveDataToDisk();
-    res.json({ success: true, count: store.reports.length });
+
+    if (updated) {
+      saveDataToDisk();
+    }
+
+    res.json({ success: true, count: store.reports.length, lastSyncTime: store.lastSyncTime });
   });
 
   // API to clear all work reports

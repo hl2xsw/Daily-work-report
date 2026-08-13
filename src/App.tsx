@@ -76,8 +76,12 @@ export default function App() {
   const pushReportsToServer = useCallback(async (
     updatedReports: WorkReportItem[],
     updatedHistory: string[],
-    syncTime: string
+    syncTime: string,
+    forceClear = false
   ) => {
+    if (updatedReports.length === 0 && !forceClear) {
+      return; // Never send empty reports unless explicitly clearing
+    }
     try {
       await fetch('/api/reports', {
         method: 'POST',
@@ -86,6 +90,7 @@ export default function App() {
           reports: updatedReports,
           history: updatedHistory,
           lastSyncTime: syncTime,
+          forceClear,
         }),
       });
     } catch (e) {
@@ -93,31 +98,61 @@ export default function App() {
     }
   }, []);
 
-  // On mount: if PC has local reports, immediately push PC data to server so smartphones see it
+  // Sync on initial mount: Load server reports first or push local if local exists
   useEffect(() => {
-    const saved = localStorage.getItem('work_reports_data');
-    const savedHistory = localStorage.getItem('imported_files_history');
-    const savedSyncTime = localStorage.getItem('last_sync_time') || new Date().toLocaleTimeString('ko-KR');
-
-    if (saved) {
+    let mounted = true;
+    const initData = async () => {
+      // First fetch from server
       try {
-        const parsed = JSON.parse(saved);
-        const parsedHist = savedHistory ? JSON.parse(savedHistory) : [];
-        const clean = Array.isArray(parsed) ? parsed.filter((r) => r && typeof r.id === 'string' && !r.id.startsWith('sample-')) : [];
-        if (clean.length > 0) {
-          pushReportsToServer(clean, parsedHist, savedSyncTime);
-          return;
+        const res = await fetch('/api/reports');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data.reports) && data.reports.length > 0) {
+            if (mounted) {
+              setReports(data.reports);
+              if (Array.isArray(data.history)) setImportedFilesHistory(data.history);
+              if (data.lastSyncTime && data.lastSyncTime !== '-') setLastSyncTime(data.lastSyncTime);
+            }
+            return;
+          }
         }
       } catch (e) {
-        console.error('Error parsing local storage on mount:', e);
+        console.warn('Initial server fetch failed, checking local storage:', e);
       }
-    }
-    fetchServerReports();
-  }, [pushReportsToServer, fetchServerReports]);
+
+      // If server was empty, check if PC has local storage
+      const saved = localStorage.getItem('work_reports_data');
+      const savedHistory = localStorage.getItem('imported_files_history');
+      const savedSyncTime = localStorage.getItem('last_sync_time') || new Date().toLocaleTimeString('ko-KR');
+
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          const parsedHist = savedHistory ? JSON.parse(savedHistory) : [];
+          const clean = Array.isArray(parsed) ? parsed.filter((r) => r && typeof r.id === 'string' && !r.id.startsWith('sample-')) : [];
+          if (clean.length > 0) {
+            if (mounted) {
+              setReports(clean);
+              if (parsedHist.length > 0) setImportedFilesHistory(parsedHist);
+              setLastSyncTime(savedSyncTime);
+            }
+            await pushReportsToServer(clean, parsedHist, savedSyncTime);
+          }
+        } catch (e) {
+          console.error('Error parsing local storage on mount:', e);
+        }
+      }
+    };
+
+    initData();
+    return () => {
+      mounted = false;
+    };
+  }, [pushReportsToServer]);
 
   // Periodic polling for smartphones/secondary tabs
   useEffect(() => {
-    const interval = setInterval(fetchServerReports, 5000);
+    const interval = setInterval(fetchServerReports, 3000);
     return () => clearInterval(interval);
   }, [fetchServerReports]);
 
@@ -218,7 +253,14 @@ export default function App() {
       addedReportsCount: filteredReports.length,
       newFilesCount: newFileNames.length,
     };
-  }, [importedFilesHistory, reports]);
+  }, [importedFilesHistory, reports, pushReportsToServer]);
+
+  // Auto-push to central server whenever reports state contains non-empty items
+  useEffect(() => {
+    if (reports.length > 0) {
+      pushReportsToServer(reports, importedFilesHistory, lastSyncTime);
+    }
+  }, [reports, importedFilesHistory, lastSyncTime, pushReportsToServer]);
 
   // Manual & Auto Update Action from watched folder
   const handleTriggerUpdate = React.useCallback(async () => {
@@ -249,8 +291,9 @@ export default function App() {
       const nowStr = new Date().toLocaleTimeString('ko-KR');
       setLastSyncTime(nowStr);
       setIsUpdating(false);
-      // Automatically sync latest state to server for mobile devices
-      pushReportsToServer(reports, importedFilesHistory, nowStr);
+      if (reports.length > 0) {
+        pushReportsToServer(reports, importedFilesHistory, nowStr);
+      }
     }
   }, [handleImportReports, autoSyncTime, pushReportsToServer, reports, importedFilesHistory]);
 
@@ -263,6 +306,7 @@ export default function App() {
       localStorage.removeItem('imported_files_history');
       setSelectedDate('');
       try {
+        await pushReportsToServer([], [], '-', true);
         await fetch('/api/reports', { method: 'DELETE' });
       } catch (e) {
         console.error('Failed to clear server reports:', e);
