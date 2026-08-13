@@ -26,15 +26,23 @@ async function startServer() {
   // Shared Data Store File Path for Cross-Device Persistence
   const dataFilePath = path.join(process.cwd(), "work_reports_store.json");
 
+  const isSampleReport = (r: any) => {
+    if (!r || typeof r.id !== 'string') return true;
+    if (r.id.startsWith('sample-') || r.id.startsWith('rep-2026-')) return true;
+    return false;
+  };
+
   const loadDataFromDisk = () => {
     try {
       if (fs.existsSync(dataFilePath)) {
         const raw = fs.readFileSync(dataFilePath, "utf-8");
         const parsed = JSON.parse(raw);
         if (parsed && Array.isArray(parsed.reports)) {
+          const cleanReports = parsed.reports.filter((r: any) => !isSampleReport(r));
+          const cleanHistory = Array.isArray(parsed.history) ? parsed.history.filter((h: any) => typeof h === 'string' && !h.includes('업무 공유.xlsx')) : [];
           return {
-            reports: parsed.reports,
-            history: Array.isArray(parsed.history) ? parsed.history : [],
+            reports: cleanReports,
+            history: cleanHistory,
             lastSyncTime: parsed.lastSyncTime || "-"
           };
         }
@@ -59,7 +67,7 @@ async function startServer() {
     }
   };
 
-  // Ensure disk file is updated with initialized store
+  // Ensure disk file is saved cleanly
   saveDataToDisk();
 
   // API to get all work reports (for PC and Mobile Devices)
@@ -70,8 +78,9 @@ async function startServer() {
     res.json(store);
   });
 
-  // API to save/sync work reports across all devices
+  // API to save/sync work reports across all devices with smart deduplicated merging
   app.post("/api/reports", (req, res) => {
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     const { reports, history, lastSyncTime, forceClear } = req.body || {};
 
     if (forceClear === true) {
@@ -81,24 +90,50 @@ async function startServer() {
         lastSyncTime: "-"
       };
       saveDataToDisk();
-      return res.json({ success: true, count: 0, lastSyncTime: "-" });
+      return res.json({ success: true, reports: [], history: [], count: 0, lastSyncTime: "-" });
     }
 
     if (Array.isArray(reports)) {
-      store.reports = reports;
+      // Merge incoming reports with store.reports cleanly
+      const existingMap = new Map<string, any>();
+      
+      // Load current store items first
+      store.reports.forEach((r: any) => {
+        if (!isSampleReport(r)) {
+          const key = r.id || `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim();
+          existingMap.set(key, r);
+        }
+      });
+
+      // Merge incoming
+      reports.forEach((r: any) => {
+        if (!isSampleReport(r)) {
+          const key = r.id || `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim();
+          existingMap.set(key, r);
+        }
+      });
+
+      store.reports = Array.from(existingMap.values());
     }
 
     if (Array.isArray(history)) {
-      store.history = history;
+      const historySet = new Set([...store.history, ...history.filter((h: any) => typeof h === 'string' && !h.includes('260812 그리드팀 업무 공유'))]);
+      store.history = Array.from(historySet);
     }
 
-    if (lastSyncTime !== undefined) {
+    if (lastSyncTime && lastSyncTime !== '-') {
       store.lastSyncTime = lastSyncTime;
     }
 
     saveDataToDisk();
 
-    res.json({ success: true, count: store.reports.length, lastSyncTime: store.lastSyncTime });
+    res.json({
+      success: true,
+      reports: store.reports,
+      history: store.history,
+      count: store.reports.length,
+      lastSyncTime: store.lastSyncTime
+    });
   });
 
   // API to clear all work reports

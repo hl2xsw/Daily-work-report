@@ -15,6 +15,12 @@ import {
 import { initialSampleReports } from './data/sampleReports';
 import { CheckCircle2 } from 'lucide-react';
 
+const isSampleReportItem = (r: any) => {
+  if (!r || typeof r.id !== 'string') return true;
+  if (r.id.startsWith('sample-') || r.id.startsWith('rep-2026-') || r.id.startsWith('rep-')) return true;
+  return false;
+};
+
 export default function App() {
   const [reports, setReports] = useState<WorkReportItem[]>(() => {
     const saved = localStorage.getItem('work_reports_data');
@@ -22,8 +28,7 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          // Filter out legacy sample items if present
-          return parsed.filter((r) => r && typeof r.id === 'string' && !r.id.startsWith('sample-') && !r.id.startsWith('rep-2026-08-12-그리드팀-김철수'));
+          return parsed.filter((r) => !isSampleReportItem(r));
         }
       } catch (e) {
         console.error('Failed to load saved reports', e);
@@ -51,7 +56,7 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed;
+          return parsed.filter((h: any) => typeof h === 'string' && !h.includes('업무 공유.xlsx'));
         }
       } catch (e) {
         console.error('Failed to load saved history', e);
@@ -64,6 +69,7 @@ export default function App() {
   const reportsRef = useRef(reports);
   const historyRef = useRef(importedFilesHistory);
   const lastSyncTimeRef = useRef(lastSyncTime);
+  const isPostingRef = useRef(false);
 
   useEffect(() => {
     reportsRef.current = reports;
@@ -84,6 +90,7 @@ export default function App() {
     syncTime: string,
     forceClear = false
   ) => {
+    isPostingRef.current = true;
     try {
       const res = await fetch('/api/reports', {
         method: 'POST',
@@ -95,27 +102,48 @@ export default function App() {
           forceClear,
         }),
       });
-      if (!res.ok) {
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.reports)) {
+          const clean = data.reports.filter((r: any) => !isSampleReportItem(r));
+          reportsRef.current = clean;
+          setReports(clean);
+          if (Array.isArray(data.history)) {
+            const cleanHist = data.history.filter((h: any) => typeof h === 'string' && !h.includes('업무 공유.xlsx'));
+            historyRef.current = cleanHist;
+            setImportedFilesHistory(cleanHist);
+          }
+          if (data.lastSyncTime !== undefined) {
+            setLastSyncTime(data.lastSyncTime);
+          }
+        }
+      } else {
         console.error('Failed to push reports to server, status:', res.status);
       }
     } catch (e) {
       console.error('Failed to push reports to server:', e);
+    } finally {
+      isPostingRef.current = false;
     }
   }, []);
 
   // Fetch live reports from central server for smartphone/multi-device sync
   const fetchServerReports = useCallback(async () => {
+    if (isPostingRef.current) return;
     try {
       const res = await fetch('/api/reports');
       if (res.ok) {
         const data = await res.json();
         if (data && Array.isArray(data.reports)) {
-          reportsRef.current = data.reports;
-          setReports(data.reports);
-          if (Array.isArray(data.history)) {
-            historyRef.current = data.history;
-            setImportedFilesHistory(data.history);
-          }
+          const cleanServerReports = data.reports.filter((r: any) => !isSampleReportItem(r));
+          const cleanHistory = Array.isArray(data.history)
+            ? data.history.filter((h: any) => typeof h === 'string' && !h.includes('업무 공유.xlsx'))
+            : [];
+
+          reportsRef.current = cleanServerReports;
+          setReports(cleanServerReports);
+          historyRef.current = cleanHistory;
+          setImportedFilesHistory(cleanHistory);
           if (data.lastSyncTime !== undefined) {
             setLastSyncTime(data.lastSyncTime);
           }
@@ -126,7 +154,7 @@ export default function App() {
     }
   }, []);
 
-  // Sync on initial mount: Load server reports first or push local if local exists
+  // Sync on initial mount: Load server reports first
   useEffect(() => {
     let mounted = true;
     const initData = async () => {
@@ -135,12 +163,14 @@ export default function App() {
         if (res.ok) {
           const data = await res.json();
           if (data && Array.isArray(data.reports)) {
+            const clean = data.reports.filter((r: any) => !isSampleReportItem(r));
+            const cleanHist = Array.isArray(data.history) ? data.history.filter((h: any) => typeof h === 'string' && !h.includes('업무 공유.xlsx')) : [];
             if (mounted) {
-              setReports(data.reports);
-              if (Array.isArray(data.history)) setImportedFilesHistory(data.history);
+              setReports(clean);
+              setImportedFilesHistory(cleanHist);
               if (data.lastSyncTime !== undefined) setLastSyncTime(data.lastSyncTime);
             }
-            if (data.reports.length > 0) return;
+            return;
           }
         }
       } catch (e) {
@@ -156,14 +186,15 @@ export default function App() {
         try {
           const parsed = JSON.parse(saved);
           const parsedHist = savedHistory ? JSON.parse(savedHistory) : [];
-          const clean = Array.isArray(parsed) ? parsed.filter((r) => r && typeof r.id === 'string' && !r.id.startsWith('sample-') && !r.id.startsWith('rep-2026-08-12-그리드팀-김철수')) : [];
+          const clean = Array.isArray(parsed) ? parsed.filter((r) => !isSampleReportItem(r)) : [];
+          const cleanHist = Array.isArray(parsedHist) ? parsedHist.filter((h: any) => typeof h === 'string' && !h.includes('업무 공유.xlsx')) : [];
           if (clean.length > 0) {
             if (mounted) {
               setReports(clean);
-              if (parsedHist.length > 0) setImportedFilesHistory(parsedHist);
+              setImportedFilesHistory(cleanHist);
               setLastSyncTime(savedSyncTime);
             }
-            await pushReportsToServer(clean, parsedHist, savedSyncTime);
+            await pushReportsToServer(clean, cleanHist, savedSyncTime);
           }
         } catch (e) {
           console.error('Error parsing local storage on mount:', e);
