@@ -18,6 +18,7 @@ export interface WorkReportItem {
   vacationTypeToday?: string; // 연차, 반차, 병가 등
   vacationTypeTomorrow?: string; // 연차, 반차, 병가 등
   sourceFileName?: string; // e.g. 260803 그리드팀 업무 공유.xlsx
+  isSample?: boolean; // 샘플 데모 데이터 여부
   updatedAt: string; // ISO string
 }
 
