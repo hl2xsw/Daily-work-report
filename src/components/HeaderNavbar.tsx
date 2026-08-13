@@ -289,6 +289,12 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
 
         {/* Action Buttons */}
         <div className="flex items-center space-x-2.5 self-end md:self-auto">
+          {/* Live Sync Badge */}
+          <div className="flex items-center gap-1.5 px-3 py-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-lg text-xs font-semibold shadow-xs">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>서버 실시간 연동 ({totalReportCount}건)</span>
+          </div>
+
           {/* Manual Update Button (요구사항 5) */}
           <button
             onClick={onManualUpdate}

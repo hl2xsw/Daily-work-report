@@ -6,7 +6,12 @@ import { ReportTableView } from './components/ReportTableView';
 import { SearchView } from './components/SearchView';
 import { FileUploadView } from './components/FileUploadView';
 import { AutoUpdateTimer } from './components/AutoUpdateTimer';
-import { performFolderScan } from './utils/folderScanner';
+import {
+  performFolderScan,
+  saveDirectoryHandle,
+  scanDirectoryHandleRecursively,
+  parseFileList,
+} from './utils/folderScanner';
 import { initialSampleReports } from './data/sampleReports';
 import { CheckCircle2 } from 'lucide-react';
 
@@ -266,26 +271,69 @@ export default function App() {
   const handleTriggerUpdate = React.useCallback(async () => {
     setIsUpdating(true);
     const folderPath = localStorage.getItem('watched_folder_path') || 'D:\\Data_JAC\\_EV Innovation 부문\\업무일지\\8월';
-    showToast(`🔄 감시 폴더(${folderPath}) 스캔 및 신규 파일 동기화 진행 중...`);
 
     try {
+      // 1. Try scanning using stored DirectoryHandle if permission is active
       const result = await performFolderScan();
       if (!result.needFolderPermission) {
         if (result.reports.length > 0 || result.fileNames.length > 0) {
           const importRes = handleImportReports(result.reports, result.fileNames);
           if (importRes.addedReportsCount === 0) {
-            showToast(`✅ [${result.scannedFolderName || '감시 폴더'}] 동기화 완료: 기존에 읽어온 파일입니다. (신규 데이터 0건)`);
+            showToast(`✅ [${result.scannedFolderName || '감시 폴더'}] 동기화 완료: 기존 수집 데이터 유지 중 (${reports.length}건)`);
           }
         } else {
-          showToast(`ℹ️ [${result.scannedFolderName || '감시 폴더'}] 폴더에 엑셀 업무일지 파일이 존재하지 않습니다.`);
+          showToast(`ℹ️ [${result.scannedFolderName || '감시 폴더'}] 폴더에 엑셀 업무일지 파일이 없습니다.`);
         }
-      } else {
-        showToast(`📁 [엑셀 파일 관리 & 폴더 감시] 탭에서 [감시 폴더 선택 & 권한 승인]을 해 주시면 매일 ${autoSyncTime}에 자동 수집됩니다.`);
-        setActiveTab('upload');
+        return;
       }
+
+      // 2. If directory handle needs user gesture or is missing: Open folder picker directly on desktop
+      if ('showDirectoryPicker' in window) {
+        try {
+          showToast(`📂 감시 폴더 [${folderPath}] 승인을 위해 폴더 선택 창을 엽니다...`);
+          // @ts-ignore
+          const handle = await window.showDirectoryPicker();
+          if (handle) {
+            await saveDirectoryHandle(handle);
+            localStorage.setItem('watched_folder_path', handle.name);
+
+            const entries = await scanDirectoryHandleRecursively(handle);
+            const files = entries.map((e) => e.file);
+            const { reports: scannedReports, fileNames } = await parseFileList(files);
+
+            if (fileNames.length > 0) {
+              handleImportReports(scannedReports, fileNames);
+            } else {
+              showToast(`ℹ️ 선택한 폴더 [${handle.name}]에 엑셀 업무일지 파일이 존재하지 않습니다.`);
+            }
+            return;
+          }
+        } catch (pickerErr: any) {
+          if (pickerErr.name === 'AbortError') {
+            showToast(`ℹ️ 폴더 선택이 취소되었습니다.`);
+            return;
+          }
+        }
+      }
+
+      // 3. Fallback for mobile / older browsers: Trigger file input click
+      const hiddenInput = document.createElement('input');
+      hiddenInput.type = 'file';
+      hiddenInput.multiple = true;
+      hiddenInput.accept = '.xlsx, .xls, .csv';
+      hiddenInput.onchange = async (e: any) => {
+        const files = e.target.files;
+        if (files && files.length > 0) {
+          showToast(`📂 선택한 ${files.length}개 엑셀 파일 수집 중...`);
+          const { reports: scannedReports, fileNames } = await parseFileList(files);
+          handleImportReports(scannedReports, fileNames);
+        }
+      };
+      hiddenInput.click();
+
     } catch (err: any) {
       console.error('Auto folder scan failed:', err);
-      showToast(`📁 [엑셀 파일 관리 & 폴더 감시] 탭에서 감시 폴더를 선택하고 권한을 승인해 주세요.`);
+      showToast(`📁 엑셀 파일 선택 후 즉시 동기화됩니다.`);
       setActiveTab('upload');
     } finally {
       const nowStr = new Date().toLocaleTimeString('ko-KR');
@@ -295,7 +343,7 @@ export default function App() {
         pushReportsToServer(reports, importedFilesHistory, nowStr);
       }
     }
-  }, [handleImportReports, autoSyncTime, pushReportsToServer, reports, importedFilesHistory]);
+  }, [handleImportReports, pushReportsToServer, reports, importedFilesHistory]);
 
   // Clear all data manually if user wants a clean slate
   const handleClearAllData = async () => {

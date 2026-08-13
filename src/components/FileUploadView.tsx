@@ -118,6 +118,22 @@ export const FileUploadView: React.FC<FileUploadViewProps> = ({
 
   return (
     <div className="space-y-6 pb-12">
+      {/* Mobile & PC Sync Info Banner */}
+      <div className="bg-gradient-to-r from-blue-900/90 to-indigo-900/90 text-white rounded-xl p-4 border border-blue-700/50 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 font-bold text-xs text-blue-200">
+            <span className="flex h-2 w-2 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span>📱 스마트폰 / 모바일 사용자 안내 (실시간 서버 연동)</span>
+          </div>
+          <p className="text-xs text-slate-200 leading-relaxed">
+            PC에서 엑셀 파일 수집/업데이트를 진행하면, <strong>모바일 기기에서는 3초 간격으로 서버와 실시간 동기화</strong>되어 대시보드와 보고서가 즉시 업데이트됩니다. (스마트폰에서 직접 엑셀을 추가하려면 우측 '파일 선택' 이용)
+          </p>
+        </div>
+      </div>
+
       {/* Header Info */}
       <div className="bg-white rounded-xl shadow-xs border border-slate-200/80 p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
