@@ -60,23 +60,6 @@ export default function App() {
     return [];
   });
 
-  // Fetch live reports from central server for smartphone/multi-device sync
-  const fetchServerReports = useCallback(async () => {
-    try {
-      const res = await fetch('/api/reports');
-      if (res.ok) {
-        const data = await res.json();
-        if (data && Array.isArray(data.reports) && data.reports.length > 0) {
-          setReports(data.reports);
-          if (Array.isArray(data.history)) setImportedFilesHistory(data.history);
-          if (data.lastSyncTime && data.lastSyncTime !== '-') setLastSyncTime(data.lastSyncTime);
-        }
-      }
-    } catch (err) {
-      console.warn('Could not fetch from server API:', err);
-    }
-  }, []);
-
   // Sync to server API
   const pushReportsToServer = useCallback(async (
     updatedReports: WorkReportItem[],
@@ -88,7 +71,7 @@ export default function App() {
       return; // Never send empty reports unless explicitly clearing
     }
     try {
-      await fetch('/api/reports', {
+      const res = await fetch('/api/reports', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -98,10 +81,52 @@ export default function App() {
           forceClear,
         }),
       });
+      if (!res.ok) {
+        console.error('Failed to push reports to server, status:', res.status);
+      }
     } catch (e) {
       console.error('Failed to push reports to server:', e);
     }
   }, []);
+
+  // Fetch live reports from central server for smartphone/multi-device sync
+  const fetchServerReports = useCallback(async () => {
+    try {
+      const res = await fetch('/api/reports');
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.reports)) {
+          if (data.reports.length > 0) {
+            setReports(data.reports);
+            if (Array.isArray(data.history) && data.history.length > 0) {
+              setImportedFilesHistory(data.history);
+            }
+            if (data.lastSyncTime && data.lastSyncTime !== '-') {
+              setLastSyncTime(data.lastSyncTime);
+            }
+          } else {
+            // If server reports are empty but client has local reports, push local reports to server
+            const saved = localStorage.getItem('work_reports_data');
+            if (saved) {
+              try {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                  const savedHist = localStorage.getItem('imported_files_history');
+                  const parsedHist = savedHist ? JSON.parse(savedHist) : [];
+                  const savedTime = localStorage.getItem('last_sync_time') || new Date().toLocaleTimeString('ko-KR');
+                  await pushReportsToServer(parsed, parsedHist, savedTime);
+                }
+              } catch (e) {
+                console.error('Failed parsing local storage in fetchServerReports fallback:', e);
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Could not fetch from server API:', err);
+    }
+  }, [pushReportsToServer]);
 
   // Sync on initial mount: Load server reports first or push local if local exists
   useEffect(() => {

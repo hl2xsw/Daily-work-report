@@ -10,6 +10,17 @@ async function startServer() {
 
   app.use(express.json({ limit: "50mb" }));
 
+  // CORS and Preflight middleware for cross-device & mobile compatibility
+  app.use((req, res, next) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+    if (req.method === "OPTIONS") {
+      return res.sendStatus(200);
+    }
+    next();
+  });
+
   // Shared Data Store File Path for Cross-Device Persistence
   const dataFilePath = path.join(process.cwd(), "work_reports_store.json");
 
@@ -58,22 +69,30 @@ async function startServer() {
 
   // API to save/sync work reports across all devices
   app.post("/api/reports", (req, res) => {
-    const { reports, history, lastSyncTime, forceClear } = req.body;
+    const { reports, history, lastSyncTime, forceClear } = req.body || {};
+
+    if (forceClear === true) {
+      store = {
+        reports: [],
+        history: [],
+        lastSyncTime: "-"
+      };
+      saveDataToDisk();
+      return res.json({ success: true, count: 0, lastSyncTime: "-" });
+    }
+
     let updated = false;
 
-    if (Array.isArray(reports)) {
-      // Protect existing non-empty store from being overwritten by an empty array from an uninitialized client
-      if (reports.length > 0 || forceClear === true || store.reports.length === 0) {
-        store.reports = reports;
-        updated = true;
-      }
+    if (Array.isArray(reports) && reports.length > 0) {
+      store.reports = reports;
+      updated = true;
     }
-    if (Array.isArray(history)) {
-      if (history.length > 0 || forceClear === true || store.history.length === 0) {
-        store.history = history;
-        updated = true;
-      }
+
+    if (Array.isArray(history) && history.length > 0) {
+      store.history = history;
+      updated = true;
     }
+
     if (lastSyncTime && lastSyncTime !== '-') {
       store.lastSyncTime = lastSyncTime;
       updated = true;
