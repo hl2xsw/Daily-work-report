@@ -85,48 +85,53 @@ export default function App() {
   }, [lastSyncTime]);
 
   // Sync to server API
-  const pushReportsToServer = useCallback(async (
-    updatedReports: WorkReportItem[],
-    updatedHistory: string[],
-    syncTime: string,
-    forceClear = false
-  ) => {
-    isPostingRef.current = true;
-    try {
-      const res = await fetch('/api/reports', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          reports: updatedReports,
-          history: updatedHistory,
-          lastSyncTime: syncTime,
-          forceClear,
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && Array.isArray(data.reports)) {
-          const clean = data.reports.filter((r: any) => r && typeof r.id === 'string' && !isSampleReportItem(r));
-          reportsRef.current = clean;
-          setReports(clean);
-          if (Array.isArray(data.history)) {
-            const cleanHist = data.history.filter((h: any) => typeof h === 'string');
-            historyRef.current = cleanHist;
-            setImportedFilesHistory(cleanHist);
+  const pushReportsToServer = useCallback(
+    async (
+      updatedReports: WorkReportItem[],
+      updatedHistory: string[],
+      syncTime: string,
+      forceClear = false,
+      overwrite = true
+    ) => {
+      isPostingRef.current = true;
+      try {
+        const res = await fetch('/api/reports', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            reports: updatedReports,
+            history: updatedHistory,
+            lastSyncTime: syncTime,
+            forceClear,
+            overwrite,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data.reports)) {
+            const clean = data.reports.filter((r: any) => r && typeof r.id === 'string' && !isSampleReportItem(r));
+            reportsRef.current = clean;
+            setReports(clean);
+            if (Array.isArray(data.history)) {
+              const cleanHist = data.history.filter((h: any) => typeof h === 'string');
+              historyRef.current = cleanHist;
+              setImportedFilesHistory(cleanHist);
+            }
+            if (data.lastSyncTime !== undefined && data.lastSyncTime !== '-') {
+              setLastSyncTime(data.lastSyncTime);
+            }
           }
-          if (data.lastSyncTime !== undefined) {
-            setLastSyncTime(data.lastSyncTime);
-          }
+        } else {
+          console.error('Failed to push reports to server, status:', res.status);
         }
-      } else {
-        console.error('Failed to push reports to server, status:', res.status);
+      } catch (e) {
+        console.error('Failed to push reports to server:', e);
+      } finally {
+        isPostingRef.current = false;
       }
-    } catch (e) {
-      console.error('Failed to push reports to server:', e);
-    } finally {
-      isPostingRef.current = false;
-    }
-  }, []);
+    },
+    []
+  );
 
   // Fetch live reports from central server for smartphone/multi-device sync
   const fetchServerReports = useCallback(async () => {
@@ -156,37 +161,26 @@ export default function App() {
             return;
           }
 
-          // Case 2: Client has reports, server has none (e.g. server restarted or not yet populated)
+          // Case 2: Client has reports, server has none (e.g. server restarted or empty)
           if (current.length > 0 && cleanServerReports.length === 0) {
-            pushReportsToServer(current, currentHist, lastSyncTimeRef.current);
+            pushReportsToServer(current, currentHist, lastSyncTimeRef.current, false, true);
             return;
           }
 
-          // Case 3: Both have reports -> Smart Merge
-          if (cleanServerReports.length > 0 && current.length > 0) {
-            const mergedMap = new Map<string, WorkReportItem>();
-            cleanServerReports.forEach((r) => {
-              const key = r.id || `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim();
-              mergedMap.set(key, r);
-            });
-            current.forEach((r) => {
-              const key = r.id || `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim();
-              if (!mergedMap.has(key)) {
-                mergedMap.set(key, r);
-              }
-            });
+          // Case 3: Both have reports -> Check if server reports list or lastSyncTime changed
+          if (cleanServerReports.length > 0) {
+            const serverIds = cleanServerReports.map((r) => r.id).join(',');
+            const currentIds = current.map((r) => r.id).join(',');
+            const serverSync = data.lastSyncTime || '-';
+            const currentSync = lastSyncTimeRef.current;
 
-            const mergedList = Array.from(mergedMap.values());
-            const mergedHist = Array.from(new Set([...cleanHistory, ...currentHist]));
-
-            // If server had new items that client didn't have
-            if (cleanServerReports.length > current.length || mergedList.length > current.length) {
-              reportsRef.current = mergedList;
-              setReports(mergedList);
-              historyRef.current = mergedHist;
-              setImportedFilesHistory(mergedHist);
-              if (data.lastSyncTime !== undefined && data.lastSyncTime !== '-') {
-                setLastSyncTime(data.lastSyncTime);
+            if (serverIds !== currentIds || cleanServerReports.length !== current.length || (serverSync !== '-' && serverSync !== currentSync)) {
+              reportsRef.current = cleanServerReports;
+              setReports(cleanServerReports);
+              historyRef.current = cleanHistory;
+              setImportedFilesHistory(cleanHistory);
+              if (serverSync !== '-') {
+                setLastSyncTime(serverSync);
               }
             }
           }

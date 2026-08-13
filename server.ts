@@ -82,7 +82,7 @@ async function startServer() {
   // API to save/sync work reports across all devices with smart deduplicated merging
   app.post("/api/reports", (req, res) => {
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-    const { reports, history, lastSyncTime, forceClear } = req.body || {};
+    const { reports, history, lastSyncTime, forceClear, overwrite } = req.body || {};
 
     if (forceClear === true) {
       store = {
@@ -95,31 +95,40 @@ async function startServer() {
     }
 
     if (Array.isArray(reports)) {
-      // Merge incoming reports with store.reports cleanly
-      const existingMap = new Map<string, any>();
-      
-      // Load current store items first
-      store.reports.forEach((r: any) => {
-        if (r && typeof r.id === 'string' && !isSampleReport(r)) {
-          const key = r.id || `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim();
-          existingMap.set(key, r);
-        }
-      });
+      if (overwrite === true) {
+        // Direct replacement from authoritative sender (e.g. PC uploading/updating reports)
+        store.reports = reports.filter((r: any) => r && typeof r.id === 'string');
+      } else {
+        // Merge incoming reports with store.reports cleanly
+        const existingMap = new Map<string, any>();
+        
+        // Load current store items first
+        store.reports.forEach((r: any) => {
+          if (r && typeof r.id === 'string') {
+            const key = r.id || `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim();
+            existingMap.set(key, r);
+          }
+        });
 
-      // Merge incoming
-      reports.forEach((r: any) => {
-        if (r && typeof r.id === 'string' && !isSampleReport(r)) {
-          const key = r.id || `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim();
-          existingMap.set(key, r);
-        }
-      });
+        // Merge incoming
+        reports.forEach((r: any) => {
+          if (r && typeof r.id === 'string') {
+            const key = r.id || `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim();
+            existingMap.set(key, r);
+          }
+        });
 
-      store.reports = Array.from(existingMap.values());
+        store.reports = Array.from(existingMap.values());
+      }
     }
 
     if (Array.isArray(history)) {
-      const historySet = new Set([...store.history, ...history.filter((h: any) => typeof h === 'string')]);
-      store.history = Array.from(historySet);
+      if (overwrite === true) {
+        store.history = history.filter((h: any) => typeof h === 'string');
+      } else {
+        const historySet = new Set([...store.history, ...history.filter((h: any) => typeof h === 'string')]);
+        store.history = Array.from(historySet);
+      }
     }
 
     if (lastSyncTime && lastSyncTime !== '-') {
