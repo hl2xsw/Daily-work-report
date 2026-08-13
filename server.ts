@@ -3,12 +3,77 @@ import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
+import { initialSampleReports } from "./src/data/sampleReports";
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  app.use(express.json({ limit: "50mb" }));
+
+  // Shared Data Store File Path for Cross-Device Persistence
+  const dataFilePath = path.join(process.cwd(), "work_reports_store.json");
+
+  const loadDataFromDisk = () => {
+    try {
+      if (fs.existsSync(dataFilePath)) {
+        const raw = fs.readFileSync(dataFilePath, "utf-8");
+        const parsed = JSON.parse(raw);
+        if (parsed && Array.isArray(parsed.reports) && parsed.reports.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.error("Error reading work_reports_store.json:", e);
+    }
+    return {
+      reports: initialSampleReports,
+      history: ["260812 그리드팀 업무일지.xlsx", "260812 개발팀 업무일지.xlsx", "260812 운영팀 업무일지.xlsx"],
+      lastSyncTime: new Date().toLocaleTimeString('ko-KR')
+    };
+  };
+
+  let store = loadDataFromDisk();
+
+  const saveDataToDisk = () => {
+    try {
+      fs.writeFileSync(dataFilePath, JSON.stringify(store, null, 2), "utf-8");
+    } catch (e) {
+      console.error("Error writing work_reports_store.json:", e);
+    }
+  };
+
+  // API to get all work reports (for PC and Mobile Devices)
+  app.get("/api/reports", (req, res) => {
+    res.json(store);
+  });
+
+  // API to save/sync work reports across all devices
+  app.post("/api/reports", (req, res) => {
+    const { reports, history, lastSyncTime } = req.body;
+    if (Array.isArray(reports)) {
+      store.reports = reports;
+    }
+    if (Array.isArray(history)) {
+      store.history = history;
+    }
+    if (lastSyncTime) {
+      store.lastSyncTime = lastSyncTime;
+    }
+    saveDataToDisk();
+    res.json({ success: true, count: store.reports.length });
+  });
+
+  // API to clear all work reports
+  app.delete("/api/reports", (req, res) => {
+    store = {
+      reports: [],
+      history: [],
+      lastSyncTime: "-"
+    };
+    saveDataToDisk();
+    res.json({ success: true });
+  });
 
   // Health check API
   app.get("/api/health", (req, res) => {

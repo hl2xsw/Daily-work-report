@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { WorkReportItem } from './types';
 import { HeaderNavbar } from './components/HeaderNavbar';
 import { DashboardView } from './components/DashboardView';
@@ -7,6 +7,7 @@ import { SearchView } from './components/SearchView';
 import { FileUploadView } from './components/FileUploadView';
 import { AutoUpdateTimer } from './components/AutoUpdateTimer';
 import { performFolderScan } from './utils/folderScanner';
+import { initialSampleReports } from './data/sampleReports';
 import { CheckCircle2 } from 'lucide-react';
 
 export default function App() {
@@ -14,19 +15,22 @@ export default function App() {
     const saved = localStorage.getItem('work_reports_data');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
       } catch (e) {
         console.error('Failed to load saved reports', e);
       }
     }
-    return []; // Start empty on first run
+    return initialSampleReports; // Default to rich sample EV Innovation reports
   });
 
   const [activeTab, setActiveTab] = useState<'dashboard' | 'table' | 'search' | 'upload'>('dashboard');
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [isUpdating, setIsUpdating] = useState<boolean>(false);
   const [lastSyncTime, setLastSyncTime] = useState<string>(() => {
-    return localStorage.getItem('last_sync_time') || '-';
+    return localStorage.getItem('last_sync_time') || new Date().toLocaleTimeString('ko-KR');
   });
   const [autoSyncEnabled, setAutoSyncEnabled] = useState<boolean>(true);
   const [autoSyncTime, setAutoSyncTime] = useState<string>(() => {
@@ -39,13 +43,61 @@ export default function App() {
     const saved = localStorage.getItem('imported_files_history');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
       } catch (e) {
         console.error('Failed to load saved history', e);
       }
     }
-    return []; // Start empty on first run
+    return ['260812 그리드팀 업무일지.xlsx', '260812 개발팀 업무일지.xlsx', '260812 운영팀 업무일지.xlsx'];
   });
+
+  // Fetch live reports from central server for smartphone/multi-device sync
+  const fetchServerReports = useCallback(async () => {
+    try {
+      const res = await fetch('/api/reports');
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.reports) && data.reports.length > 0) {
+          setReports(data.reports);
+          if (Array.isArray(data.history)) setImportedFilesHistory(data.history);
+          if (data.lastSyncTime) setLastSyncTime(data.lastSyncTime);
+        }
+      }
+    } catch (err) {
+      console.warn('Could not fetch from server API, using local storage:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchServerReports();
+    // Poll server every 15 seconds so smartphones receive updates live
+    const interval = setInterval(fetchServerReports, 15000);
+    return () => clearInterval(interval);
+  }, [fetchServerReports]);
+
+  // Sync to server API
+  const pushReportsToServer = async (
+    updatedReports: WorkReportItem[],
+    updatedHistory: string[],
+    syncTime: string
+  ) => {
+    try {
+      await fetch('/api/reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reports: updatedReports,
+          history: updatedHistory,
+          lastSyncTime: syncTime,
+        }),
+      });
+    } catch (e) {
+      console.error('Failed to push reports to server:', e);
+    }
+  };
 
   // Save to localStorage whenever data changes
   useEffect(() => {
@@ -107,29 +159,32 @@ export default function App() {
 
     const newFileNames = candidateFileNames.filter((fn) => !existingFileSet.has(fn));
 
+    let finalReports = reports;
     if (filteredReports.length > 0) {
-      setReports((prev) => {
-        const prevIds = new Set(prev.map((r) => r.id));
-        const prevKeys = new Set(prev.map((r) => `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim()));
-        const trulyNew = filteredReports.filter((r) => {
-          if (prevIds.has(r.id)) return false;
-          const key = `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim();
-          if (prevKeys.has(key)) return false;
-          return true;
-        });
-        return [...trulyNew, ...prev];
+      const prevIds = new Set(reports.map((r) => r.id));
+      const prevKeys = new Set(reports.map((r) => `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim()));
+      const trulyNew = filteredReports.filter((r) => {
+        if (prevIds.has(r.id)) return false;
+        const key = `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim();
+        if (prevKeys.has(key)) return false;
+        return true;
       });
+      finalReports = [...trulyNew, ...reports];
+      setReports(finalReports);
     }
 
+    let finalHistory = importedFilesHistory;
     if (candidateFileNames.length > 0) {
-      setImportedFilesHistory((prev) => {
-        const combined = new Set([...candidateFileNames, ...prev]);
-        return Array.from(combined);
-      });
+      const combined = new Set([...candidateFileNames, ...importedFilesHistory]);
+      finalHistory = Array.from(combined);
+      setImportedFilesHistory(finalHistory);
     }
 
     const nowStr = new Date().toLocaleTimeString('ko-KR');
     setLastSyncTime(nowStr);
+
+    // Push to server so smartphones see it instantly
+    pushReportsToServer(finalReports, finalHistory, nowStr);
 
     if (filteredReports.length > 0) {
       showToast(`✅ ${candidateFileNames.length}개 파일 중 ${newFileNames.length}개 신규 파일 (${filteredReports.length}건 업무일지) 수집 완료!`);
@@ -176,13 +231,18 @@ export default function App() {
   }, [handleImportReports, autoSyncTime]);
 
   // Clear all data manually if user wants a clean slate
-  const handleClearAllData = () => {
+  const handleClearAllData = async () => {
     if (window.confirm('정말로 수집된 모든 업무일지 데이터와 이력을 초기화하시겠습니까?')) {
       setReports([]);
       setImportedFilesHistory([]);
       localStorage.removeItem('work_reports_data');
       localStorage.removeItem('imported_files_history');
       setSelectedDate('');
+      try {
+        await fetch('/api/reports', { method: 'DELETE' });
+      } catch (e) {
+        console.error('Failed to clear server reports:', e);
+      }
       showToast('🧹 모든 업무일지 데이터와 수집 이력이 초기화되었습니다.');
     }
   };
