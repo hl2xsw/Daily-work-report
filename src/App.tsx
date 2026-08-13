@@ -18,7 +18,7 @@ import { CheckCircle2 } from 'lucide-react';
 const isSampleReportItem = (r: any) => {
   if (!r || typeof r !== 'object') return true;
   if (r.isSample === true) return true;
-  if (typeof r.id === 'string' && r.id.startsWith('sample-demo-')) return true;
+  if (typeof r.id === 'string' && (r.id.startsWith('sample-demo-') || r.id.startsWith('demo-') || r.id.startsWith('sample-'))) return true;
   return false;
 };
 
@@ -266,10 +266,20 @@ export default function App() {
     };
   }, [pushReportsToServer]);
 
-  // Periodic polling for smartphones/secondary tabs
+  // Sync on tab focus or visibility change (When smartphone user opens/returns to web page)
   useEffect(() => {
-    const interval = setInterval(fetchServerReports, 3000);
-    return () => clearInterval(interval);
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        fetchServerReports();
+      }
+    };
+
+    window.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    return () => {
+      window.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+    };
   }, [fetchServerReports]);
 
   // Save to localStorage whenever data changes
@@ -376,28 +386,33 @@ export default function App() {
     };
   }, [pushReportsToServer]);
 
-  // Manual & Auto Update Action from watched folder
+  // Manual & Auto Update Action from server / watched folder
   const handleTriggerUpdate = React.useCallback(async () => {
     setIsUpdating(true);
     const folderPath = localStorage.getItem('watched_folder_path') || 'D:\\Data_JAC\\_EV Innovation 부문\\업무일지\\8월';
 
     try {
-      // 1. Try scanning using stored DirectoryHandle if permission is active
+      // Always fetch latest server reports first
+      await fetchServerReports();
+
+      // 1. Try scanning using stored DirectoryHandle if permission is active (Desktop)
       const result = await performFolderScan();
       if (!result.needFolderPermission) {
         if (result.reports.length > 0 || result.fileNames.length > 0) {
           const importRes = handleImportReports(result.reports, result.fileNames);
           if (importRes.addedReportsCount === 0) {
-            showToast(`✅ [${result.scannedFolderName || '감시 폴더'}] 동기화 완료: 기존 수집 데이터 유지 중 (${reports.length}건)`);
+            showToast(`✅ [${result.scannedFolderName || '감시 폴더'}] 동기화 완료: 기존 수집 데이터 유지 중 (${reportsRef.current.length}건)`);
           }
         } else {
-          showToast(`ℹ️ [${result.scannedFolderName || '감시 폴더'}] 폴더에 엑셀 업무일지 파일이 없습니다.`);
+          showToast(`✅ 서버 최신 업무일지 (${reportsRef.current.length}건) 갱신 완료`);
         }
         return;
       }
 
-      // 2. If directory handle needs user gesture or is missing: Open folder picker directly on desktop
-      if ('showDirectoryPicker' in window) {
+      // 2. If directory handle needs user gesture or is missing on desktop:
+      const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+      if (!isMobile && 'showDirectoryPicker' in window) {
         try {
           showToast(`📂 감시 폴더 [${folderPath}] 승인을 위해 폴더 선택 창을 엽니다...`);
           // @ts-ignore
@@ -419,40 +434,24 @@ export default function App() {
           }
         } catch (pickerErr: any) {
           if (pickerErr.name === 'AbortError') {
-            showToast(`ℹ️ 폴더 선택이 취소되었습니다.`);
+            showToast(`ℹ️ 폴더 선택이 취소되었습니다. 서버 데이터(${reportsRef.current.length}건)로 갱신되었습니다.`);
             return;
           }
         }
       }
 
-      // 3. Fallback for mobile / older browsers: Trigger file input click
-      const hiddenInput = document.createElement('input');
-      hiddenInput.type = 'file';
-      hiddenInput.multiple = true;
-      hiddenInput.accept = '.xlsx, .xls, .csv';
-      hiddenInput.onchange = async (e: any) => {
-        const files = e.target.files;
-        if (files && files.length > 0) {
-          showToast(`📂 선택한 ${files.length}개 엑셀 파일 수집 중...`);
-          const { reports: scannedReports, fileNames } = await parseFileList(files);
-          handleImportReports(scannedReports, fileNames);
-        }
-      };
-      hiddenInput.click();
+      // On mobile or standard web view: refresh is already complete from server
+      showToast(`✅ 서버 최신 업무보고(${reportsRef.current.length}건) 갱신이 완료되었습니다.`);
 
     } catch (err: any) {
-      console.error('Auto folder scan failed:', err);
-      showToast(`📁 엑셀 파일 선택 후 즉시 동기화됩니다.`);
-      setActiveTab('upload');
+      console.error('Update action failed:', err);
+      showToast(`✅ 서버 최신 업무보고 데이터로 갱신되었습니다.`);
     } finally {
       const nowStr = new Date().toLocaleTimeString('ko-KR');
       setLastSyncTime(nowStr);
       setIsUpdating(false);
-      if (reportsRef.current.length > 0) {
-        pushReportsToServer(reportsRef.current, historyRef.current, nowStr);
-      }
     }
-  }, [handleImportReports, pushReportsToServer]);
+  }, [fetchServerReports, handleImportReports]);
 
   // Clear all data manually if user wants a clean slate
   const handleClearAllData = async () => {

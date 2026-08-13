@@ -29,7 +29,7 @@ async function startServer() {
   const isSampleReport = (r: any) => {
     if (!r || typeof r !== 'object') return true;
     if (r.isSample === true) return true;
-    if (typeof r.id === 'string' && r.id.startsWith('sample-demo-')) return true;
+    if (typeof r.id === 'string' && (r.id.startsWith('sample-demo-') || r.id.startsWith('demo-') || r.id.startsWith('sample-'))) return true;
     return false;
   };
 
