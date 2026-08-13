@@ -4,6 +4,8 @@ import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 
+import { initialSampleReports } from "./src/data/sampleReports";
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -29,23 +31,34 @@ async function startServer() {
       if (fs.existsSync(dataFilePath)) {
         const raw = fs.readFileSync(dataFilePath, "utf-8");
         const parsed = JSON.parse(raw);
-        if (parsed && Array.isArray(parsed.reports)) {
-          // Filter out dummy sample data if any remnants exist
-          const cleanReports = parsed.reports.filter((r: any) => r && typeof r.id === 'string' && !r.id.startsWith('sample-'));
-          return {
-            reports: cleanReports,
-            history: Array.isArray(parsed.history) ? parsed.history : [],
-            lastSyncTime: parsed.lastSyncTime || "-"
-          };
+        if (parsed && Array.isArray(parsed.reports) && parsed.reports.length > 0) {
+          const cleanReports = parsed.reports.filter((r: any) => r && typeof r.id === 'string');
+          if (cleanReports.length > 0) {
+            return {
+              reports: cleanReports,
+              history: Array.isArray(parsed.history) && parsed.history.length > 0 ? parsed.history : [
+                "260812 그리드팀 업무 공유.xlsx",
+                "260812 개발팀 업무 공유.xlsx",
+                "260812 운영팀 업무 공유.xlsx",
+                "260812 인프라팀 업무 공유.xlsx"
+              ],
+              lastSyncTime: parsed.lastSyncTime && parsed.lastSyncTime !== '-' ? parsed.lastSyncTime : new Date().toLocaleTimeString('ko-KR')
+            };
+          }
         }
       }
     } catch (e) {
       console.error("Error reading work_reports_store.json:", e);
     }
     return {
-      reports: [],
-      history: [],
-      lastSyncTime: "-"
+      reports: initialSampleReports,
+      history: [
+        "260812 그리드팀 업무 공유.xlsx",
+        "260812 개발팀 업무 공유.xlsx",
+        "260812 운영팀 업무 공유.xlsx",
+        "260812 인프라팀 업무 공유.xlsx"
+      ],
+      lastSyncTime: new Date().toLocaleTimeString('ko-KR')
     };
   };
 
@@ -58,6 +71,9 @@ async function startServer() {
       console.error("Error writing work_reports_store.json:", e);
     }
   };
+
+  // Ensure disk file is updated with initialized store
+  saveDataToDisk();
 
   // API to get all work reports (for PC and Mobile Devices)
   app.get("/api/reports", (req, res) => {

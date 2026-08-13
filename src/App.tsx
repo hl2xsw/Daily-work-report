@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { WorkReportItem } from './types';
 import { HeaderNavbar } from './components/HeaderNavbar';
 import { DashboardView } from './components/DashboardView';
@@ -22,14 +22,13 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          // Remove dummy sample reports if present
-          return parsed.filter((r) => r && typeof r.id === 'string' && !r.id.startsWith('sample-'));
+          return parsed;
         }
       } catch (e) {
         console.error('Failed to load saved reports', e);
       }
     }
-    return [];
+    return initialSampleReports;
   });
 
   const [activeTab, setActiveTab] = useState<'dashboard' | 'table' | 'search' | 'upload'>('dashboard');
@@ -57,8 +56,30 @@ export default function App() {
         console.error('Failed to load saved history', e);
       }
     }
-    return [];
+    return [
+      "260812 그리드팀 업무 공유.xlsx",
+      "260812 개발팀 업무 공유.xlsx",
+      "260812 운영팀 업무 공유.xlsx",
+      "260812 인프라팀 업무 공유.xlsx"
+    ];
   });
+
+  // Refs for current state to avoid stale closures in interval / callbacks
+  const reportsRef = useRef(reports);
+  const historyRef = useRef(importedFilesHistory);
+  const lastSyncTimeRef = useRef(lastSyncTime);
+
+  useEffect(() => {
+    reportsRef.current = reports;
+  }, [reports]);
+
+  useEffect(() => {
+    historyRef.current = importedFilesHistory;
+  }, [importedFilesHistory]);
+
+  useEffect(() => {
+    lastSyncTimeRef.current = lastSyncTime;
+  }, [lastSyncTime]);
 
   // Sync to server API
   const pushReportsToServer = useCallback(async (
@@ -97,24 +118,37 @@ export default function App() {
         const data = await res.json();
         if (data && Array.isArray(data.reports)) {
           if (data.reports.length > 0) {
+            reportsRef.current = data.reports;
             setReports(data.reports);
             if (Array.isArray(data.history) && data.history.length > 0) {
+              historyRef.current = data.history;
               setImportedFilesHistory(data.history);
             }
             if (data.lastSyncTime && data.lastSyncTime !== '-') {
               setLastSyncTime(data.lastSyncTime);
             }
+          } else if (reportsRef.current.length > 0) {
+            // Server has 0 reports, but PC client has reports in memory -> Push to server immediately!
+            await pushReportsToServer(
+              reportsRef.current,
+              historyRef.current,
+              lastSyncTimeRef.current !== '-' ? lastSyncTimeRef.current : new Date().toLocaleTimeString('ko-KR')
+            );
           } else {
-            // If server reports are empty but client has local reports, push local reports to server
+            // Check localStorage if state was empty
             const saved = localStorage.getItem('work_reports_data');
             if (saved) {
               try {
                 const parsed = JSON.parse(saved);
-                if (Array.isArray(parsed) && parsed.length > 0) {
+                const clean = Array.isArray(parsed) ? parsed.filter((r) => r && typeof r.id === 'string' && !r.id.startsWith('sample-')) : [];
+                if (clean.length > 0) {
                   const savedHist = localStorage.getItem('imported_files_history');
                   const parsedHist = savedHist ? JSON.parse(savedHist) : [];
                   const savedTime = localStorage.getItem('last_sync_time') || new Date().toLocaleTimeString('ko-KR');
-                  await pushReportsToServer(parsed, parsedHist, savedTime);
+                  setReports(clean);
+                  if (parsedHist.length > 0) setImportedFilesHistory(parsedHist);
+                  setLastSyncTime(savedTime);
+                  await pushReportsToServer(clean, parsedHist, savedTime);
                 }
               } catch (e) {
                 console.error('Failed parsing local storage in fetchServerReports fallback:', e);
@@ -226,10 +260,13 @@ export default function App() {
 
   // Import uploaded custom files with strict file & row deduplication
   const handleImportReports = React.useCallback((newReports: WorkReportItem[], fileNames?: string[]) => {
-    const existingFileSet = new Set(importedFilesHistory);
-    const existingIds = new Set(reports.map((r) => r.id));
+    const currentReports = reportsRef.current;
+    const currentHistory = historyRef.current;
+
+    const existingFileSet = new Set(currentHistory);
+    const existingIds = new Set(currentReports.map((r) => r.id));
     const existingCompositeKeys = new Set(
-      reports.map((r) => `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim())
+      currentReports.map((r) => `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim())
     );
 
     // Filter out reports that already exist by ID or composite key
@@ -246,24 +283,26 @@ export default function App() {
 
     const newFileNames = candidateFileNames.filter((fn) => !existingFileSet.has(fn));
 
-    let finalReports = reports;
+    let finalReports = currentReports;
     if (filteredReports.length > 0) {
-      const prevIds = new Set(reports.map((r) => r.id));
-      const prevKeys = new Set(reports.map((r) => `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim()));
+      const prevIds = new Set(currentReports.map((r) => r.id));
+      const prevKeys = new Set(currentReports.map((r) => `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim()));
       const trulyNew = filteredReports.filter((r) => {
         if (prevIds.has(r.id)) return false;
         const key = `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim();
         if (prevKeys.has(key)) return false;
         return true;
       });
-      finalReports = [...trulyNew, ...reports];
+      finalReports = [...trulyNew, ...currentReports];
+      reportsRef.current = finalReports;
       setReports(finalReports);
     }
 
-    let finalHistory = importedFilesHistory;
+    let finalHistory = currentHistory;
     if (candidateFileNames.length > 0) {
-      const combined = new Set([...candidateFileNames, ...importedFilesHistory]);
+      const combined = new Set([...candidateFileNames, ...currentHistory]);
       finalHistory = Array.from(combined);
+      historyRef.current = finalHistory;
       setImportedFilesHistory(finalHistory);
     }
 
@@ -283,7 +322,7 @@ export default function App() {
       addedReportsCount: filteredReports.length,
       newFilesCount: newFileNames.length,
     };
-  }, [importedFilesHistory, reports, pushReportsToServer]);
+  }, [pushReportsToServer]);
 
   // Auto-push to central server whenever reports state contains non-empty items
   useEffect(() => {
@@ -364,11 +403,11 @@ export default function App() {
       const nowStr = new Date().toLocaleTimeString('ko-KR');
       setLastSyncTime(nowStr);
       setIsUpdating(false);
-      if (reports.length > 0) {
-        pushReportsToServer(reports, importedFilesHistory, nowStr);
+      if (reportsRef.current.length > 0) {
+        pushReportsToServer(reportsRef.current, historyRef.current, nowStr);
       }
     }
-  }, [handleImportReports, pushReportsToServer, reports, importedFilesHistory]);
+  }, [handleImportReports, pushReportsToServer]);
 
   // Clear all data manually if user wants a clean slate
   const handleClearAllData = async () => {

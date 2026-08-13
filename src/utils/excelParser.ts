@@ -102,42 +102,63 @@ export async function parseExcelFile(file: File): Promise<WorkReportItem[]> {
   // F열(5) : 비고
   let headerIndex = -1;
   let colMap: Record<string, number> = {
-    author: 0,
-    todayTask: 1,
-    taskResult: 2,
-    tomorrowTask: 3,
-    issues: 4,
-    remarks: 5,
+    author: -1,
+    todayTask: -1,
+    taskResult: -1,
+    tomorrowTask: -1,
+    issues: -1,
+    remarks: -1,
   };
 
-  for (let r = 0; r < Math.min(jsonRows.length, 10); r++) {
+  // Search first 15 rows for header keywords
+  for (let r = 0; r < Math.min(jsonRows.length, 15); r++) {
     const row = jsonRows[r];
     if (Array.isArray(row)) {
       const rowStr = row.map((cell) => String(cell || '').trim());
       const isHeader = rowStr.some(
         (c) =>
-          c.includes('담당자') ||
+          c.includes('담당') ||
           c.includes('성명') ||
           c.includes('이름') ||
+          c.includes('작성자') ||
           c.includes('금일') ||
+          c.includes('오늘') ||
           c.includes('업무내용') ||
-          c.includes('익일')
+          c.includes('주요업무') ||
+          c.includes('익일') ||
+          c.includes('내일')
       );
 
       if (isHeader) {
         headerIndex = r;
         rowStr.forEach((colName, cIdx) => {
-          if (colName.includes('담당자') || colName.includes('성명') || colName.includes('이름')) colMap['author'] = cIdx;
-          else if (colName.includes('금일') || colName.includes('오늘업무') || (colName.includes('업무') && !colName.includes('익일') && !colName.includes('결과'))) colMap['todayTask'] = cIdx;
-          else if (colName.includes('결과') || colName.includes('진행상황') || colName.includes('상태')) colMap['taskResult'] = cIdx;
-          else if (colName.includes('익일') || colName.includes('내일')) colMap['tomorrowTask'] = cIdx;
-          else if (colName.includes('이슈') || colName.includes('특이사항') || colName.includes('문제')) colMap['issues'] = cIdx;
-          else if (colName.includes('비고') || colName.includes('휴가') || colName.includes('메모')) colMap['remarks'] = cIdx;
+          const cClean = colName.replace(/\s+/g, '');
+          if (cClean.includes('담당') || cClean.includes('성명') || cClean.includes('이름') || cClean.includes('작성자') || cClean.includes('사원')) {
+            colMap['author'] = cIdx;
+          } else if (cClean.includes('금일') || cClean.includes('오늘') || cClean.includes('주요업무') || (cClean.includes('업무') && !cClean.includes('익일') && !cClean.includes('결과'))) {
+            colMap['todayTask'] = cIdx;
+          } else if (cClean.includes('결과') || cClean.includes('진행상황') || cClean.includes('진행률') || cClean.includes('달성률') || cClean.includes('상태')) {
+            colMap['taskResult'] = cIdx;
+          } else if (cClean.includes('익일') || cClean.includes('내일') || cClean.includes('향후계획')) {
+            colMap['tomorrowTask'] = cIdx;
+          } else if (cClean.includes('이슈') || cClean.includes('특이사항') || cClean.includes('문제')) {
+            colMap['issues'] = cIdx;
+          } else if (cClean.includes('비고') || cClean.includes('휴가') || cClean.includes('메모') || cClean.includes('참고')) {
+            colMap['remarks'] = cIdx;
+          }
         });
         break;
       }
     }
   }
+
+  // Fallback default column mapping if header was not found or partially mapped
+  if (colMap['author'] === -1) colMap['author'] = 0;
+  if (colMap['todayTask'] === -1) colMap['todayTask'] = 1;
+  if (colMap['taskResult'] === -1) colMap['taskResult'] = 2;
+  if (colMap['tomorrowTask'] === -1) colMap['tomorrowTask'] = 3;
+  if (colMap['issues'] === -1) colMap['issues'] = 4;
+  if (colMap['remarks'] === -1) colMap['remarks'] = 5;
 
   const startRow = headerIndex >= 0 ? headerIndex + 1 : 1;
   const parsedItems: WorkReportItem[] = [];
@@ -146,14 +167,14 @@ export async function parseExcelFile(file: File): Promise<WorkReportItem[]> {
     const row = jsonRows[i];
     if (!row || !Array.isArray(row) || row.length === 0) continue;
 
-    const author = String(row[colMap['author'] ?? 0] || '').trim();
+    let author = String(row[colMap['author']] || '').trim();
     
-    // Ignore invalid/empty rows or headers
+    // Ignore explicit header repetitions or total rows
     if (
-      !author ||
       author === '담당자' ||
       author === '성명' ||
       author === '이름' ||
+      author === '작성자' ||
       author.includes('합계') ||
       author.includes('소계') ||
       author.includes('TOTAL')
@@ -161,15 +182,30 @@ export async function parseExcelFile(file: File): Promise<WorkReportItem[]> {
       continue;
     }
 
-    const todayTask = String(row[colMap['todayTask'] ?? 1] || '').trim();
-    const taskResult = String(row[colMap['taskResult'] ?? 2] || '').trim();
-    const tomorrowTask = String(row[colMap['tomorrowTask'] ?? 3] || '').trim();
-    const issues = String(row[colMap['issues'] ?? 4] || '').trim();
-    const remarks = String(row[colMap['remarks'] ?? 5] || '').trim();
+    const todayTask = String(row[colMap['todayTask']] || '').trim();
+    const taskResult = String(row[colMap['taskResult']] || '').trim();
+    const tomorrowTask = String(row[colMap['tomorrowTask']] || '').trim();
+    const issues = String(row[colMap['issues']] || '').trim();
+    const remarks = String(row[colMap['remarks']] || '').trim();
 
     // Skip if all task fields are empty
     if (!todayTask && !tomorrowTask && !taskResult && !issues && !remarks) {
       continue;
+    }
+
+    // If author is empty or numeric (e.g. row number), attempt fallback to nearby columns or default
+    if (!author || /^\d+$/.test(author)) {
+      // Check column 0, 1, 2 for a candidate name (2-4 Korean chars or short name)
+      for (let c = 0; c < Math.min(row.length, 4); c++) {
+        const val = String(row[c] || '').trim();
+        if (val && val.length >= 2 && val.length <= 10 && !/^\d+$/.test(val) && !val.includes('업무') && !val.includes('진행')) {
+          author = val;
+          break;
+        }
+      }
+      if (!author || /^\d+$/.test(author)) {
+        author = '담당자';
+      }
     }
 
     // Work Status Determination
