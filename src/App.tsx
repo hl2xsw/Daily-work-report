@@ -21,21 +21,22 @@ export default function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+        if (Array.isArray(parsed)) {
+          // Filter out legacy sample items if present
+          return parsed.filter((r) => r && typeof r.id === 'string' && !r.id.startsWith('sample-') && !r.id.startsWith('rep-2026-08-12-그리드팀-김철수'));
         }
       } catch (e) {
         console.error('Failed to load saved reports', e);
       }
     }
-    return initialSampleReports;
+    return [];
   });
 
   const [activeTab, setActiveTab] = useState<'dashboard' | 'table' | 'search' | 'upload'>('dashboard');
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [isUpdating, setIsUpdating] = useState<boolean>(false);
   const [lastSyncTime, setLastSyncTime] = useState<string>(() => {
-    return localStorage.getItem('last_sync_time') || new Date().toLocaleTimeString('ko-KR');
+    return localStorage.getItem('last_sync_time') || '-';
   });
   const [autoSyncEnabled, setAutoSyncEnabled] = useState<boolean>(true);
   const [autoSyncTime, setAutoSyncTime] = useState<string>(() => {
@@ -49,19 +50,14 @@ export default function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           return parsed;
         }
       } catch (e) {
         console.error('Failed to load saved history', e);
       }
     }
-    return [
-      "260812 그리드팀 업무 공유.xlsx",
-      "260812 개발팀 업무 공유.xlsx",
-      "260812 운영팀 업무 공유.xlsx",
-      "260812 인프라팀 업무 공유.xlsx"
-    ];
+    return [];
   });
 
   // Refs for current state to avoid stale closures in interval / callbacks
@@ -88,9 +84,6 @@ export default function App() {
     syncTime: string,
     forceClear = false
   ) => {
-    if (updatedReports.length === 0 && !forceClear) {
-      return; // Never send empty reports unless explicitly clearing
-    }
     try {
       const res = await fetch('/api/reports', {
         method: 'POST',
@@ -117,67 +110,37 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         if (data && Array.isArray(data.reports)) {
-          if (data.reports.length > 0) {
-            reportsRef.current = data.reports;
-            setReports(data.reports);
-            if (Array.isArray(data.history) && data.history.length > 0) {
-              historyRef.current = data.history;
-              setImportedFilesHistory(data.history);
-            }
-            if (data.lastSyncTime && data.lastSyncTime !== '-') {
-              setLastSyncTime(data.lastSyncTime);
-            }
-          } else if (reportsRef.current.length > 0) {
-            // Server has 0 reports, but PC client has reports in memory -> Push to server immediately!
-            await pushReportsToServer(
-              reportsRef.current,
-              historyRef.current,
-              lastSyncTimeRef.current !== '-' ? lastSyncTimeRef.current : new Date().toLocaleTimeString('ko-KR')
-            );
-          } else {
-            // Check localStorage if state was empty
-            const saved = localStorage.getItem('work_reports_data');
-            if (saved) {
-              try {
-                const parsed = JSON.parse(saved);
-                const clean = Array.isArray(parsed) ? parsed.filter((r) => r && typeof r.id === 'string' && !r.id.startsWith('sample-')) : [];
-                if (clean.length > 0) {
-                  const savedHist = localStorage.getItem('imported_files_history');
-                  const parsedHist = savedHist ? JSON.parse(savedHist) : [];
-                  const savedTime = localStorage.getItem('last_sync_time') || new Date().toLocaleTimeString('ko-KR');
-                  setReports(clean);
-                  if (parsedHist.length > 0) setImportedFilesHistory(parsedHist);
-                  setLastSyncTime(savedTime);
-                  await pushReportsToServer(clean, parsedHist, savedTime);
-                }
-              } catch (e) {
-                console.error('Failed parsing local storage in fetchServerReports fallback:', e);
-              }
-            }
+          reportsRef.current = data.reports;
+          setReports(data.reports);
+          if (Array.isArray(data.history)) {
+            historyRef.current = data.history;
+            setImportedFilesHistory(data.history);
+          }
+          if (data.lastSyncTime !== undefined) {
+            setLastSyncTime(data.lastSyncTime);
           }
         }
       }
     } catch (err) {
       console.warn('Could not fetch from server API:', err);
     }
-  }, [pushReportsToServer]);
+  }, []);
 
   // Sync on initial mount: Load server reports first or push local if local exists
   useEffect(() => {
     let mounted = true;
     const initData = async () => {
-      // First fetch from server
       try {
         const res = await fetch('/api/reports');
         if (res.ok) {
           const data = await res.json();
-          if (data && Array.isArray(data.reports) && data.reports.length > 0) {
+          if (data && Array.isArray(data.reports)) {
             if (mounted) {
               setReports(data.reports);
               if (Array.isArray(data.history)) setImportedFilesHistory(data.history);
-              if (data.lastSyncTime && data.lastSyncTime !== '-') setLastSyncTime(data.lastSyncTime);
+              if (data.lastSyncTime !== undefined) setLastSyncTime(data.lastSyncTime);
             }
-            return;
+            if (data.reports.length > 0) return;
           }
         }
       } catch (e) {
@@ -187,13 +150,13 @@ export default function App() {
       // If server was empty, check if PC has local storage
       const saved = localStorage.getItem('work_reports_data');
       const savedHistory = localStorage.getItem('imported_files_history');
-      const savedSyncTime = localStorage.getItem('last_sync_time') || new Date().toLocaleTimeString('ko-KR');
+      const savedSyncTime = localStorage.getItem('last_sync_time') || '-';
 
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
           const parsedHist = savedHistory ? JSON.parse(savedHistory) : [];
-          const clean = Array.isArray(parsed) ? parsed.filter((r) => r && typeof r.id === 'string' && !r.id.startsWith('sample-')) : [];
+          const clean = Array.isArray(parsed) ? parsed.filter((r) => r && typeof r.id === 'string' && !r.id.startsWith('sample-') && !r.id.startsWith('rep-2026-08-12-그리드팀-김철수')) : [];
           if (clean.length > 0) {
             if (mounted) {
               setReports(clean);
@@ -416,7 +379,9 @@ export default function App() {
       setImportedFilesHistory([]);
       localStorage.removeItem('work_reports_data');
       localStorage.removeItem('imported_files_history');
+      localStorage.setItem('last_sync_time', '-');
       setSelectedDate('');
+      setLastSyncTime('-');
       try {
         await pushReportsToServer([], [], '-', true);
         await fetch('/api/reports', { method: 'DELETE' });
@@ -425,6 +390,22 @@ export default function App() {
       }
       showToast('🧹 모든 업무일지 데이터와 수집 이력이 초기화되었습니다.');
     }
+  };
+
+  // Load sample data on demand
+  const handleLoadSampleData = async () => {
+    setReports(initialSampleReports);
+    const sampleHistory = [
+      "260812 그리드팀 업무 공유.xlsx",
+      "260812 개발팀 업무 공유.xlsx",
+      "260812 운영팀 업무 공유.xlsx",
+      "260812 인프라팀 업무 공유.xlsx"
+    ];
+    setImportedFilesHistory(sampleHistory);
+    const nowStr = new Date().toLocaleTimeString('ko-KR');
+    setLastSyncTime(nowStr);
+    await pushReportsToServer(initialSampleReports, sampleHistory, nowStr);
+    showToast('💡 샘플 데모 데이터가 수집 및 서버 동기화되었습니다.');
   };
 
   return (
@@ -464,6 +445,7 @@ export default function App() {
             onImportReports={handleImportReports}
             onTriggerUpdate={handleTriggerUpdate}
             onClearAllData={handleClearAllData}
+            onLoadSampleData={handleLoadSampleData}
             isUpdating={isUpdating}
             importedFilesHistory={importedFilesHistory}
           />

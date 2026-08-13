@@ -23,6 +23,7 @@ interface FileUploadViewProps {
   onImportReports: (newReports: WorkReportItem[], fileNames?: string[]) => void;
   onTriggerUpdate: () => void;
   onClearAllData?: () => void;
+  onLoadSampleData?: () => void;
   isUpdating: boolean;
   importedFilesHistory: string[];
 }
@@ -31,6 +32,7 @@ export const FileUploadView: React.FC<FileUploadViewProps> = ({
   onImportReports,
   onTriggerUpdate,
   onClearAllData,
+  onLoadSampleData,
   isUpdating,
   importedFilesHistory,
 }) => {
@@ -305,15 +307,28 @@ export const FileUploadView: React.FC<FileUploadViewProps> = ({
             최근 동기화 수집 파일 이력 ({importedFilesHistory.length}건)
           </h3>
 
-          {onClearAllData && importedFilesHistory.length > 0 && (
-            <button
-              onClick={onClearAllData}
-              className="flex items-center space-x-1 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold rounded-lg transition"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>데이터 전체 초기화</span>
-            </button>
-          )}
+          <div className="flex items-center space-x-2">
+            {onLoadSampleData && (
+              <button
+                onClick={onLoadSampleData}
+                className="flex items-center space-x-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-semibold rounded-lg transition"
+                title="테스트용 샘플 데이터를 로드합니다"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+                <span>샘플 데모 데이터 수집</span>
+              </button>
+            )}
+
+            {onClearAllData && (
+              <button
+                onClick={onClearAllData}
+                className="flex items-center space-x-1 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold rounded-lg transition"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>데이터 전체 초기화</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {importedFilesHistory.length === 0 ? (

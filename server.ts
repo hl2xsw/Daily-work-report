@@ -31,34 +31,21 @@ async function startServer() {
       if (fs.existsSync(dataFilePath)) {
         const raw = fs.readFileSync(dataFilePath, "utf-8");
         const parsed = JSON.parse(raw);
-        if (parsed && Array.isArray(parsed.reports) && parsed.reports.length > 0) {
-          const cleanReports = parsed.reports.filter((r: any) => r && typeof r.id === 'string');
-          if (cleanReports.length > 0) {
-            return {
-              reports: cleanReports,
-              history: Array.isArray(parsed.history) && parsed.history.length > 0 ? parsed.history : [
-                "260812 그리드팀 업무 공유.xlsx",
-                "260812 개발팀 업무 공유.xlsx",
-                "260812 운영팀 업무 공유.xlsx",
-                "260812 인프라팀 업무 공유.xlsx"
-              ],
-              lastSyncTime: parsed.lastSyncTime && parsed.lastSyncTime !== '-' ? parsed.lastSyncTime : new Date().toLocaleTimeString('ko-KR')
-            };
-          }
+        if (parsed && Array.isArray(parsed.reports)) {
+          return {
+            reports: parsed.reports,
+            history: Array.isArray(parsed.history) ? parsed.history : [],
+            lastSyncTime: parsed.lastSyncTime || "-"
+          };
         }
       }
     } catch (e) {
       console.error("Error reading work_reports_store.json:", e);
     }
     return {
-      reports: initialSampleReports,
-      history: [
-        "260812 그리드팀 업무 공유.xlsx",
-        "260812 개발팀 업무 공유.xlsx",
-        "260812 운영팀 업무 공유.xlsx",
-        "260812 인프라팀 업무 공유.xlsx"
-      ],
-      lastSyncTime: new Date().toLocaleTimeString('ko-KR')
+      reports: [],
+      history: [],
+      lastSyncTime: "-"
     };
   };
 
@@ -97,26 +84,19 @@ async function startServer() {
       return res.json({ success: true, count: 0, lastSyncTime: "-" });
     }
 
-    let updated = false;
-
-    if (Array.isArray(reports) && reports.length > 0) {
+    if (Array.isArray(reports)) {
       store.reports = reports;
-      updated = true;
     }
 
-    if (Array.isArray(history) && history.length > 0) {
+    if (Array.isArray(history)) {
       store.history = history;
-      updated = true;
     }
 
-    if (lastSyncTime && lastSyncTime !== '-') {
+    if (lastSyncTime !== undefined) {
       store.lastSyncTime = lastSyncTime;
-      updated = true;
     }
 
-    if (updated) {
-      saveDataToDisk();
-    }
+    saveDataToDisk();
 
     res.json({ success: true, count: store.reports.length, lastSyncTime: store.lastSyncTime });
   });
