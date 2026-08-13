@@ -27,9 +27,9 @@ async function startServer() {
       console.error("Error reading work_reports_store.json:", e);
     }
     return {
-      reports: initialSampleReports,
-      history: ["260812 그리드팀 업무일지.xlsx", "260812 개발팀 업무일지.xlsx", "260812 운영팀 업무일지.xlsx"],
-      lastSyncTime: new Date().toLocaleTimeString('ko-KR')
+      reports: [],
+      history: [],
+      lastSyncTime: "-"
     };
   };
 

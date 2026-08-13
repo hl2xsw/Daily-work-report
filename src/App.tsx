@@ -23,7 +23,7 @@ export default function App() {
         console.error('Failed to load saved reports', e);
       }
     }
-    return initialSampleReports; // Default to rich sample EV Innovation reports
+    return [];
   });
 
   const [activeTab, setActiveTab] = useState<'dashboard' | 'table' | 'search' | 'upload'>('dashboard');
@@ -51,7 +51,7 @@ export default function App() {
         console.error('Failed to load saved history', e);
       }
     }
-    return ['260812 그리드팀 업무일지.xlsx', '260812 개발팀 업무일지.xlsx', '260812 운영팀 업무일지.xlsx'];
+    return [];
   });
 
   // Fetch live reports from central server for smartphone/multi-device sync
@@ -63,23 +63,16 @@ export default function App() {
         if (data && Array.isArray(data.reports) && data.reports.length > 0) {
           setReports(data.reports);
           if (Array.isArray(data.history)) setImportedFilesHistory(data.history);
-          if (data.lastSyncTime) setLastSyncTime(data.lastSyncTime);
+          if (data.lastSyncTime && data.lastSyncTime !== '-') setLastSyncTime(data.lastSyncTime);
         }
       }
     } catch (err) {
-      console.warn('Could not fetch from server API, using local storage:', err);
+      console.warn('Could not fetch from server API:', err);
     }
   }, []);
 
-  useEffect(() => {
-    fetchServerReports();
-    // Poll server every 15 seconds so smartphones receive updates live
-    const interval = setInterval(fetchServerReports, 15000);
-    return () => clearInterval(interval);
-  }, [fetchServerReports]);
-
   // Sync to server API
-  const pushReportsToServer = async (
+  const pushReportsToServer = useCallback(async (
     updatedReports: WorkReportItem[],
     updatedHistory: string[],
     syncTime: string
@@ -97,6 +90,41 @@ export default function App() {
     } catch (e) {
       console.error('Failed to push reports to server:', e);
     }
+  }, []);
+
+  // On mount: if PC has local reports, immediately push PC data to server so smartphones see it
+  useEffect(() => {
+    const saved = localStorage.getItem('work_reports_data');
+    const savedHistory = localStorage.getItem('imported_files_history');
+    const savedSyncTime = localStorage.getItem('last_sync_time') || new Date().toLocaleTimeString('ko-KR');
+
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        const parsedHist = savedHistory ? JSON.parse(savedHistory) : [];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          pushReportsToServer(parsed, parsedHist, savedSyncTime);
+          return;
+        }
+      } catch (e) {
+        console.error('Error parsing local storage on mount:', e);
+      }
+    }
+    fetchServerReports();
+  }, [pushReportsToServer, fetchServerReports]);
+
+  // Periodic polling for smartphones/secondary tabs
+  useEffect(() => {
+    const interval = setInterval(fetchServerReports, 10000);
+    return () => clearInterval(interval);
+  }, [fetchServerReports]);
+
+  // Manual sync trigger button handler for PC users
+  const handleManualSyncToMobile = async () => {
+    const nowStr = new Date().toLocaleTimeString('ko-KR');
+    setLastSyncTime(nowStr);
+    await pushReportsToServer(reports, importedFilesHistory, nowStr);
+    showToast(`📱 PC에 보관된 업무일지 (${reports.length}건)가 스마트폰으로 즉시 동기화되었습니다!`);
   };
 
   // Save to localStorage whenever data changes
@@ -254,6 +282,7 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onManualUpdate={handleTriggerUpdate}
+        onSyncToMobile={handleManualSyncToMobile}
         isUpdating={isUpdating}
         lastSyncTime={lastSyncTime}
         totalReportCount={reports.length}
