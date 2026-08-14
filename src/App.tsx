@@ -15,11 +15,10 @@ import {
 import { initialSampleReports } from './data/sampleReports';
 import { CheckCircle2 } from 'lucide-react';
 
-const isSampleReportItem = (r: any) => {
-  if (!r || typeof r !== 'object') return true;
-  if (r.isSample === true) return true;
-  if (typeof r.id === 'string' && (r.id.startsWith('sample-demo-') || r.id.startsWith('demo-') || r.id.startsWith('sample-'))) return true;
-  return false;
+const isValidReportItem = (r: any): r is WorkReportItem => {
+  if (!r || typeof r !== 'object') return false;
+  if (typeof r.id !== 'string' || !r.id) return false;
+  return true;
 };
 
 export default function App() {
@@ -29,7 +28,7 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed.filter((r) => r && typeof r.id === 'string' && !isSampleReportItem(r));
+          return parsed.filter(isValidReportItem);
         }
       } catch (e) {
         console.error('Failed to load saved reports', e);
@@ -113,7 +112,7 @@ export default function App() {
         if (res.ok) {
           const data = await res.json();
           if (data && Array.isArray(data.reports)) {
-            const clean = data.reports.filter((r: any) => r && typeof r.id === 'string' && !isSampleReportItem(r));
+            const clean = data.reports.filter(isValidReportItem);
             reportsRef.current = clean;
             setReports(clean);
             if (Array.isArray(data.history)) {
@@ -154,9 +153,7 @@ export default function App() {
         if (res.ok) {
           const data = await res.json();
           if (data && Array.isArray(data.reports)) {
-            const cleanServerReports = data.reports.filter(
-              (r: any) => r && typeof r.id === 'string' && !isSampleReportItem(r)
-            );
+            const cleanServerReports = data.reports.filter(isValidReportItem);
             const cleanHistory = Array.isArray(data.history)
               ? data.history.filter((h: any) => typeof h === 'string')
               : [];
@@ -237,9 +234,7 @@ export default function App() {
         if (res.ok) {
           const data = await res.json();
           if (data && Array.isArray(data.reports)) {
-            const cleanReports = data.reports.filter(
-              (r: any) => r && typeof r.id === 'string' && !isSampleReportItem(r)
-            );
+            const cleanReports = data.reports.filter(isValidReportItem);
             const cleanHist = Array.isArray(data.history)
               ? data.history.filter((h: any) => typeof h === 'string')
               : [];
@@ -274,7 +269,7 @@ export default function App() {
         try {
           const parsed = JSON.parse(saved);
           localReports = Array.isArray(parsed)
-            ? parsed.filter((r) => r && typeof r.id === 'string' && !isSampleReportItem(r))
+            ? parsed.filter(isValidReportItem)
             : [];
         } catch (e) {}
       }
@@ -383,13 +378,17 @@ export default function App() {
 
   // Unique list of dates
   const availableDates = useMemo(() => {
-    return Array.from(new Set(reports.map((r) => r.date))).sort().reverse();
+    return Array.from(new Set(reports.map((r) => r.date).filter(Boolean))).sort().reverse();
   }, [reports]);
 
-  // Sync selectedDate when new reports are imported
+  // Sync selectedDate when new reports are imported or loaded
   useEffect(() => {
-    if (availableDates.length > 0 && !selectedDate) {
-      setSelectedDate(availableDates[0]);
+    if (availableDates.length > 0) {
+      if (!selectedDate || !availableDates.includes(selectedDate)) {
+        setSelectedDate(availableDates[0]);
+      }
+    } else if (selectedDate) {
+      setSelectedDate('');
     }
   }, [availableDates, selectedDate]);
 
@@ -452,7 +451,7 @@ export default function App() {
     setLastSyncTime(nowStr);
 
     // Push to server so smartphones see it instantly
-    pushReportsToServer(finalReports, finalHistory, nowStr);
+    pushReportsToServer(finalReports, finalHistory, nowStr, false, true);
 
     if (filteredReports.length > 0) {
       showToast(`✅ ${candidateFileNames.length}개 파일 중 ${newFileNames.length}개 신규 파일 (${filteredReports.length}건 업무일지) 수집 완료!`);
@@ -473,59 +472,53 @@ export default function App() {
 
     try {
       // Always fetch latest server reports first
-      await fetchServerReports();
+      await fetchServerReports(true);
 
-      // 1. Try scanning using stored DirectoryHandle if permission is active (Desktop)
-      const result = await performFolderScan();
-      if (!result.needFolderPermission) {
-        if (result.reports.length > 0 || result.fileNames.length > 0) {
-          const importRes = handleImportReports(result.reports, result.fileNames);
-          if (importRes.addedReportsCount === 0) {
-            showToast(`✅ [${result.scannedFolderName || '감시 폴더'}] 동기화 완료: 기존 수집 데이터 유지 중 (${reportsRef.current.length}건)`);
-          }
-        } else {
-          showToast(`✅ 서버 최신 업무일지 (${reportsRef.current.length}건) 갱신 완료`);
-        }
-        return;
-      }
-
-      // 2. If directory handle needs user gesture or is missing on desktop:
+      // Check if running on desktop or mobile
       const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
-      if (!isMobile && 'showDirectoryPicker' in window) {
-        try {
-          showToast(`📂 감시 폴더 [${folderPath}] 승인을 위해 폴더 선택 창을 엽니다...`);
-          // @ts-ignore
-          const handle = await window.showDirectoryPicker();
-          if (handle) {
-            await saveDirectoryHandle(handle);
-            localStorage.setItem('watched_folder_path', handle.name);
-
-            const entries = await scanDirectoryHandleRecursively(handle);
-            const files = entries.map((e) => e.file);
-            const { reports: scannedReports, fileNames } = await parseFileList(files);
-
-            if (fileNames.length > 0) {
-              handleImportReports(scannedReports, fileNames);
-            } else {
-              showToast(`ℹ️ 선택한 폴더 [${handle.name}]에 엑셀 업무일지 파일이 존재하지 않습니다.`);
-            }
-            return;
+      // On Desktop: Try scanning using stored DirectoryHandle if permission is active
+      if (!isMobile) {
+        const result = await performFolderScan();
+        if (!result.needFolderPermission) {
+          if (result.reports.length > 0 || result.fileNames.length > 0) {
+            handleImportReports(result.reports, result.fileNames);
           }
-        } catch (pickerErr: any) {
-          if (pickerErr.name === 'AbortError') {
-            showToast(`ℹ️ 폴더 선택이 취소되었습니다. 서버 데이터(${reportsRef.current.length}건)로 갱신되었습니다.`);
-            return;
+          return;
+        }
+
+        // If directory handle needs user gesture or is missing on desktop:
+        if ('showDirectoryPicker' in window) {
+          try {
+            showToast(`📂 감시 폴더 [${folderPath}] 승인을 위해 폴더 선택 창을 엽니다...`);
+            // @ts-ignore
+            const handle = await window.showDirectoryPicker();
+            if (handle) {
+              await saveDirectoryHandle(handle);
+              localStorage.setItem('watched_folder_path', handle.name);
+
+              const entries = await scanDirectoryHandleRecursively(handle);
+              const files = entries.map((e) => e.file);
+              const { reports: scannedReports, fileNames } = await parseFileList(files);
+
+              if (fileNames.length > 0) {
+                handleImportReports(scannedReports, fileNames);
+              } else {
+                showToast(`ℹ️ 선택한 폴더 [${handle.name}]에 엑셀 업무일지 파일이 존재하지 않습니다.`);
+              }
+              return;
+            }
+          } catch (pickerErr: any) {
+            if (pickerErr.name === 'AbortError') {
+              showToast(`ℹ️ 폴더 선택이 취소되었습니다. 서버 데이터(${reportsRef.current.length}건)로 갱신되었습니다.`);
+              return;
+            }
           }
         }
       }
-
-      // On mobile or standard web view: refresh is already complete from server
-      showToast(`✅ 서버 최신 업무보고(${reportsRef.current.length}건) 갱신이 완료되었습니다.`);
-
     } catch (err: any) {
       console.error('Update action failed:', err);
-      showToast(`✅ 서버 최신 업무보고 데이터로 갱신되었습니다.`);
+      showToast(`⚠️ 서버 데이터 동기화 중 오류가 발생했습니다.`);
     } finally {
       const nowStr = new Date().toLocaleTimeString('ko-KR');
       setLastSyncTime(nowStr);

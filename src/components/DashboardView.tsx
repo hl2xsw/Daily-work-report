@@ -51,7 +51,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   // Filter reports for selected date
   const dateReports = useMemo(() => {
     if (!selectedDate) return reports;
-    return reports.filter((r) => r.date === selectedDate);
+    const filtered = reports.filter((r) => r.date === selectedDate);
+    if (filtered.length === 0 && reports.length > 0) {
+      return reports;
+    }
+    return filtered;
   }, [reports, selectedDate]);
 
   // Overall statistics

@@ -27,11 +27,10 @@ async function startServer() {
   const dataFilePath = path.join(process.cwd(), "work_reports_store.json");
   const backupFilePath = path.join(process.cwd(), "work_reports_backup.json");
 
-  const isSampleReport = (r: any) => {
-    if (!r || typeof r !== 'object') return true;
-    if (r.isSample === true) return true;
-    if (typeof r.id === 'string' && (r.id.startsWith('sample-demo-') || r.id.startsWith('demo-') || r.id.startsWith('sample-'))) return true;
-    return false;
+  const isValidReport = (r: any) => {
+    if (!r || typeof r !== 'object') return false;
+    if (typeof r.id !== 'string' || !r.id) return false;
+    return true;
   };
 
   const loadDataFromDisk = () => {
@@ -40,7 +39,7 @@ async function startServer() {
         const raw = fs.readFileSync(dataFilePath, "utf-8");
         const parsed = JSON.parse(raw);
         if (parsed && Array.isArray(parsed.reports)) {
-          const cleanReports = parsed.reports.filter((r: any) => r && typeof r.id === 'string' && !isSampleReport(r));
+          const cleanReports = parsed.reports.filter(isValidReport);
           const cleanHistory = Array.isArray(parsed.history) ? parsed.history.filter((h: any) => typeof h === 'string') : [];
           return {
             reports: cleanReports,
@@ -58,7 +57,7 @@ async function startServer() {
         const raw = fs.readFileSync(backupFilePath, "utf-8");
         const parsed = JSON.parse(raw);
         if (parsed && Array.isArray(parsed.reports)) {
-          const cleanReports = parsed.reports.filter((r: any) => r && typeof r.id === 'string' && !isSampleReport(r));
+          const cleanReports = parsed.reports.filter(isValidReport);
           const cleanHistory = Array.isArray(parsed.history) ? parsed.history.filter((h: any) => typeof h === 'string') : [];
           return {
             reports: cleanReports,
@@ -140,7 +139,7 @@ async function startServer() {
     }
 
     if (Array.isArray(reports)) {
-      const cleanIncoming = reports.filter((r: any) => r && typeof r.id === 'string' && !isSampleReport(r));
+      const cleanIncoming = reports.filter(isValidReport);
       if (overwrite === true) {
         // Direct replacement from authoritative sender (e.g. PC uploading/updating reports)
         store.reports = cleanIncoming;
