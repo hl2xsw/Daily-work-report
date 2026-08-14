@@ -25,6 +25,7 @@ async function startServer() {
 
   // Shared Data Store File Path for Cross-Device Persistence
   const dataFilePath = path.join(process.cwd(), "work_reports_store.json");
+  const backupFilePath = path.join(process.cwd(), "work_reports_backup.json");
 
   const isSampleReport = (r: any) => {
     if (!r || typeof r !== 'object') return true;
@@ -51,6 +52,25 @@ async function startServer() {
     } catch (e) {
       console.error("Error reading work_reports_store.json:", e);
     }
+
+    try {
+      if (fs.existsSync(backupFilePath)) {
+        const raw = fs.readFileSync(backupFilePath, "utf-8");
+        const parsed = JSON.parse(raw);
+        if (parsed && Array.isArray(parsed.reports)) {
+          const cleanReports = parsed.reports.filter((r: any) => r && typeof r.id === 'string' && !isSampleReport(r));
+          const cleanHistory = Array.isArray(parsed.history) ? parsed.history.filter((h: any) => typeof h === 'string') : [];
+          return {
+            reports: cleanReports,
+            history: cleanHistory,
+            lastSyncTime: parsed.lastSyncTime || "-"
+          };
+        }
+      }
+    } catch (e) {
+      console.error("Error reading work_reports_backup.json:", e);
+    }
+
     return {
       reports: [],
       history: [],
@@ -62,9 +82,13 @@ async function startServer() {
 
   const saveDataToDisk = () => {
     try {
-      fs.writeFileSync(dataFilePath, JSON.stringify(store, null, 2), "utf-8");
+      const dataStr = JSON.stringify(store, null, 2);
+      fs.writeFileSync(dataFilePath, dataStr, "utf-8");
+      if (store.reports.length > 0) {
+        fs.writeFileSync(backupFilePath, dataStr, "utf-8");
+      }
     } catch (e) {
-      console.error("Error writing work_reports_store.json:", e);
+      console.error("Error writing store to disk:", e);
     }
   };
 
@@ -73,15 +97,33 @@ async function startServer() {
 
   // API to get all work reports (for PC and Mobile Devices)
   app.get("/api/reports", (req, res) => {
-    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
     res.setHeader("Pragma", "no-cache");
     res.setHeader("Expires", "0");
-    res.json(store);
+    res.setHeader("Surrogate-Control", "no-store");
+    res.json({
+      reports: store.reports,
+      history: store.history,
+      lastSyncTime: store.lastSyncTime,
+      count: store.reports.length,
+      serverTime: new Date().toISOString()
+    });
+  });
+
+  // Fast lightweight status ping endpoint
+  app.get("/api/reports/status", (req, res) => {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+    res.json({
+      count: store.reports.length,
+      lastSyncTime: store.lastSyncTime,
+      historyCount: store.history.length,
+      serverTime: new Date().toISOString()
+    });
   });
 
   // API to save/sync work reports across all devices with smart deduplicated merging
   app.post("/api/reports", (req, res) => {
-    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
     const { reports, history, lastSyncTime, forceClear, overwrite } = req.body || {};
 
     if (forceClear === true) {
@@ -91,13 +133,17 @@ async function startServer() {
         lastSyncTime: "-"
       };
       saveDataToDisk();
+      try {
+        if (fs.existsSync(backupFilePath)) fs.unlinkSync(backupFilePath);
+      } catch (e) {}
       return res.json({ success: true, reports: [], history: [], count: 0, lastSyncTime: "-" });
     }
 
     if (Array.isArray(reports)) {
+      const cleanIncoming = reports.filter((r: any) => r && typeof r.id === 'string' && !isSampleReport(r));
       if (overwrite === true) {
         // Direct replacement from authoritative sender (e.g. PC uploading/updating reports)
-        store.reports = reports.filter((r: any) => r && typeof r.id === 'string');
+        store.reports = cleanIncoming;
       } else {
         // Merge incoming reports with store.reports cleanly
         const existingMap = new Map<string, any>();
@@ -111,7 +157,7 @@ async function startServer() {
         });
 
         // Merge incoming
-        reports.forEach((r: any) => {
+        cleanIncoming.forEach((r: any) => {
           if (r && typeof r.id === 'string') {
             const key = r.id || `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim();
             existingMap.set(key, r);
@@ -136,13 +182,15 @@ async function startServer() {
     }
 
     saveDataToDisk();
+    console.log(`[API Server] Sync completed. Stored ${store.reports.length} reports. LastSync: ${store.lastSyncTime}`);
 
     res.json({
       success: true,
       reports: store.reports,
       history: store.history,
       count: store.reports.length,
-      lastSyncTime: store.lastSyncTime
+      lastSyncTime: store.lastSyncTime,
+      serverTime: new Date().toISOString()
     });
   });
 

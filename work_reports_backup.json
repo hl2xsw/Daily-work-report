@@ -1,0 +1,16 @@
+{
+  "reports": [
+    {
+      "id": "rep-test-1",
+      "date": "2026-08-14",
+      "team": "개발팀",
+      "author": "홍길동",
+      "todayTask": "시스템 점검",
+      "status": "완료"
+    }
+  ],
+  "history": [
+    "260814 개발팀.xlsx"
+  ],
+  "lastSyncTime": "16:40:00"
+}

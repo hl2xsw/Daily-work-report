@@ -84,7 +84,7 @@ export default function App() {
     lastSyncTimeRef.current = lastSyncTime;
   }, [lastSyncTime]);
 
-  // Sync to server API
+  // Sync to server API with retry support
   const pushReportsToServer = useCallback(
     async (
       updatedReports: WorkReportItem[],
@@ -95,9 +95,13 @@ export default function App() {
     ) => {
       isPostingRef.current = true;
       try {
-        const res = await fetch('/api/reports', {
+        const res = await fetch(`/api/reports?_t=${Date.now()}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            Pragma: 'no-cache',
+          },
           body: JSON.stringify({
             reports: updatedReports,
             history: updatedHistory,
@@ -133,87 +137,132 @@ export default function App() {
     []
   );
 
-  // Fetch live reports from central server for smartphone/multi-device sync
-  const fetchServerReports = useCallback(async () => {
-    if (isPostingRef.current) return;
-    try {
-      const res = await fetch('/api/reports');
-      if (res.ok) {
-        const data = await res.json();
-        if (data && Array.isArray(data.reports)) {
-          const cleanServerReports = data.reports.filter((r: any) => r && typeof r.id === 'string' && !isSampleReportItem(r));
-          const cleanHistory = Array.isArray(data.history)
-            ? data.history.filter((h: any) => typeof h === 'string')
-            : [];
-
-          const current = reportsRef.current;
-          const currentHist = historyRef.current;
-
-          // Case 1: Server has reports, client has none (e.g. smartphone opened link for first time)
-          if (cleanServerReports.length > 0 && current.length === 0) {
-            reportsRef.current = cleanServerReports;
-            setReports(cleanServerReports);
-            historyRef.current = cleanHistory;
-            setImportedFilesHistory(cleanHistory);
-            if (data.lastSyncTime !== undefined && data.lastSyncTime !== '-') {
-              setLastSyncTime(data.lastSyncTime);
-            }
-            return;
-          }
-
-          // Case 2: Client has reports, server has none (e.g. server restarted or empty)
-          if (current.length > 0 && cleanServerReports.length === 0) {
-            pushReportsToServer(current, currentHist, lastSyncTimeRef.current, false, true);
-            return;
-          }
-
-          // Case 3: Both have reports -> Check if server reports list or lastSyncTime changed
-          if (cleanServerReports.length > 0) {
-            const serverIds = cleanServerReports.map((r) => r.id).join(',');
-            const currentIds = current.map((r) => r.id).join(',');
-            const serverSync = data.lastSyncTime || '-';
-            const currentSync = lastSyncTimeRef.current;
-
-            if (serverIds !== currentIds || cleanServerReports.length !== current.length || (serverSync !== '-' && serverSync !== currentSync)) {
-              reportsRef.current = cleanServerReports;
-              setReports(cleanServerReports);
-              historyRef.current = cleanHistory;
-              setImportedFilesHistory(cleanHistory);
-              if (serverSync !== '-') {
-                setLastSyncTime(serverSync);
-              }
-            }
-          }
-        }
-      }
-    } catch (err) {
-      console.warn('Could not fetch from server API:', err);
-    }
-  }, [pushReportsToServer]);
-
-  // Sync on initial mount: Load server reports + local storage combined
-  useEffect(() => {
-    let mounted = true;
-    const initData = async () => {
-      let serverReports: WorkReportItem[] = [];
-      let serverHist: string[] = [];
-      let serverSyncTime = '-';
-
+  // Fetch live reports from central server for smartphone/multi-device sync (with cache-busting)
+  const fetchServerReports = useCallback(
+    async (isManualTrigger = false) => {
+      if (isPostingRef.current) return;
       try {
-        const res = await fetch('/api/reports');
+        const cacheBuster = `_t=${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        const res = await fetch(`/api/reports?${cacheBuster}`, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            Pragma: 'no-cache',
+          },
+        });
+
         if (res.ok) {
           const data = await res.json();
           if (data && Array.isArray(data.reports)) {
-            serverReports = data.reports.filter((r: any) => r && typeof r.id === 'string' && !isSampleReportItem(r));
-            serverHist = Array.isArray(data.history) ? data.history.filter((h: any) => typeof h === 'string') : [];
-            if (data.lastSyncTime) serverSyncTime = data.lastSyncTime;
+            const cleanServerReports = data.reports.filter(
+              (r: any) => r && typeof r.id === 'string' && !isSampleReportItem(r)
+            );
+            const cleanHistory = Array.isArray(data.history)
+              ? data.history.filter((h: any) => typeof h === 'string')
+              : [];
+
+            const current = reportsRef.current;
+            const currentHist = historyRef.current;
+            const serverSyncTime = data.lastSyncTime && data.lastSyncTime !== '-' ? data.lastSyncTime : '';
+
+            // Case 1: Server has reports
+            if (cleanServerReports.length > 0) {
+              const serverIds = cleanServerReports.map((r) => r.id).join(',');
+              const currentIds = current.map((r) => r.id).join(',');
+              const serverSync = data.lastSyncTime || '-';
+              const currentSync = lastSyncTimeRef.current;
+
+              if (serverIds !== currentIds || cleanServerReports.length !== current.length || (serverSync !== '-' && serverSync !== currentSync)) {
+                reportsRef.current = cleanServerReports;
+                setReports(cleanServerReports);
+                historyRef.current = cleanHistory;
+                setImportedFilesHistory(cleanHistory);
+                if (serverSyncTime) {
+                  setLastSyncTime(serverSyncTime);
+                }
+              }
+
+              if (isManualTrigger) {
+                showToast(`✅ 서버에서 최신 업무보고 ${cleanServerReports.length}건을 성공적으로 갱신했습니다.`);
+              }
+              return cleanServerReports;
+            }
+
+            // Case 2: Server is empty, but client has local storage reports -> Push to server
+            if (current.length > 0 && cleanServerReports.length === 0) {
+              await pushReportsToServer(current, currentHist, lastSyncTimeRef.current, false, true);
+              if (isManualTrigger) {
+                showToast(`✅ 로컬 업무보고 ${current.length}건을 서버에 저장/동기화했습니다.`);
+              }
+              return current;
+            }
+
+            if (isManualTrigger) {
+              showToast('ℹ️ 서버에 등록된 업무보고 데이터가 없습니다. (PC에서 업로드 필요)');
+            }
+          }
+        } else {
+          console.warn('Server API error status:', res.status);
+          if (isManualTrigger) {
+            showToast(`⚠️ 서버 통신 실패 (상태코드: ${res.status}). 다시 시도해주세요.`);
+          }
+        }
+      } catch (err) {
+        console.warn('Could not fetch from server API:', err);
+        if (isManualTrigger) {
+          showToast('⚠️ 서버 연결 중 오류가 발생했습니다. 네트워크 상태를 확인해주세요.');
+        }
+      }
+    },
+    [pushReportsToServer]
+  );
+
+  // Sync on initial mount: Load server reports with automatic retry fallback
+  useEffect(() => {
+    let mounted = true;
+    let retryTimeout: any = null;
+
+    const initDataWithRetry = async (attempt = 1) => {
+      let serverLoaded = false;
+      try {
+        const cacheBuster = `_t=${Date.now()}_init${attempt}`;
+        const res = await fetch(`/api/reports?${cacheBuster}`, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            Pragma: 'no-cache',
+          },
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data.reports)) {
+            const cleanReports = data.reports.filter(
+              (r: any) => r && typeof r.id === 'string' && !isSampleReportItem(r)
+            );
+            const cleanHist = Array.isArray(data.history)
+              ? data.history.filter((h: any) => typeof h === 'string')
+              : [];
+            const syncTime = data.lastSyncTime || '-';
+
+            if (cleanReports.length > 0) {
+              if (mounted) {
+                reportsRef.current = cleanReports;
+                setReports(cleanReports);
+                historyRef.current = cleanHist;
+                setImportedFilesHistory(cleanHist);
+                if (syncTime !== '-') setLastSyncTime(syncTime);
+              }
+              serverLoaded = true;
+              return;
+            }
           }
         }
       } catch (e) {
-        console.warn('Initial server fetch failed, checking local storage:', e);
+        console.warn(`Init data fetch attempt ${attempt} failed:`, e);
       }
 
-      // Read local storage
+      // Check local storage if server was empty or unreachable
       const saved = localStorage.getItem('work_reports_data');
       const savedHistory = localStorage.getItem('imported_files_history');
       const savedSyncTime = localStorage.getItem('last_sync_time') || '-';
@@ -224,7 +273,9 @@ export default function App() {
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          localReports = Array.isArray(parsed) ? parsed.filter((r) => r && typeof r.id === 'string' && !isSampleReportItem(r)) : [];
+          localReports = Array.isArray(parsed)
+            ? parsed.filter((r) => r && typeof r.id === 'string' && !isSampleReportItem(r))
+            : [];
         } catch (e) {}
       }
       if (savedHistory) {
@@ -234,39 +285,66 @@ export default function App() {
         } catch (e) {}
       }
 
-      // Deduplicated Merge
-      const map = new Map<string, WorkReportItem>();
-      serverReports.forEach((r) => map.set(r.id || `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim(), r));
-      localReports.forEach((r) => {
-        const key = r.id || `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim();
-        if (!map.has(key)) map.set(key, r);
-      });
-
-      const combinedReports = Array.from(map.values());
-      const combinedHist = Array.from(new Set([...serverHist, ...localHist]));
-      const finalSyncTime = serverSyncTime !== '-' ? serverSyncTime : savedSyncTime;
-
-      if (mounted) {
-        reportsRef.current = combinedReports;
-        setReports(combinedReports);
-        historyRef.current = combinedHist;
-        setImportedFilesHistory(combinedHist);
-        if (finalSyncTime !== '-') setLastSyncTime(finalSyncTime);
+      if (localReports.length > 0 && mounted) {
+        reportsRef.current = localReports;
+        setReports(localReports);
+        historyRef.current = localHist;
+        setImportedFilesHistory(localHist);
+        if (savedSyncTime !== '-') setLastSyncTime(savedSyncTime);
+        // Push local data up to server
+        pushReportsToServer(localReports, localHist, savedSyncTime, false, true);
+        serverLoaded = true;
       }
 
-      // If local storage had items that were not on server yet, push to server
-      if (combinedReports.length > serverReports.length) {
-        await pushReportsToServer(combinedReports, combinedHist, finalSyncTime);
+      // If nothing loaded and attempts left, retry in 1.5s
+      if (!serverLoaded && attempt < 3 && mounted) {
+        retryTimeout = setTimeout(() => {
+          if (mounted) initDataWithRetry(attempt + 1);
+        }, 1500);
       }
     };
 
-    initData();
+    initDataWithRetry(1);
+
     return () => {
       mounted = false;
+      if (retryTimeout) clearTimeout(retryTimeout);
     };
   }, [pushReportsToServer]);
 
-  // Sync on tab focus or visibility change (When smartphone user opens/returns to web page)
+  // Periodic lightweight background sync check (Every 4 seconds) to guarantee real-time updates across PC & Smartphone
+  useEffect(() => {
+    const checkServerStatus = async () => {
+      if (isPostingRef.current) return;
+      try {
+        const cacheBuster = `_t=${Date.now()}`;
+        const res = await fetch(`/api/reports/status?${cacheBuster}`, {
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache, no-store', Pragma: 'no-cache' },
+        });
+        if (res.ok) {
+          const status = await res.json();
+          const currentCount = reportsRef.current.length;
+          const currentSync = lastSyncTimeRef.current;
+
+          // If server count or lastSyncTime changed compared to client state, do full fetch
+          if (
+            (status.count !== undefined && status.count !== currentCount) ||
+            (status.lastSyncTime && status.lastSyncTime !== '-' && status.lastSyncTime !== currentSync)
+          ) {
+            fetchServerReports();
+          }
+        }
+      } catch (e) {
+        // Silent catch for background ping
+      }
+    };
+
+    const interval = setInterval(checkServerStatus, 4000);
+    return () => clearInterval(interval);
+  }, [fetchServerReports]);
+
+  // Sync immediately on tab focus or visibility change (When smartphone user opens or returns to web page)
   useEffect(() => {
     const handleVisibilityOrFocus = () => {
       if (document.visibilityState === 'visible') {
@@ -276,9 +354,11 @@ export default function App() {
 
     window.addEventListener('visibilitychange', handleVisibilityOrFocus);
     window.addEventListener('focus', handleVisibilityOrFocus);
+    window.addEventListener('online', handleVisibilityOrFocus);
     return () => {
       window.removeEventListener('visibilitychange', handleVisibilityOrFocus);
       window.removeEventListener('focus', handleVisibilityOrFocus);
+      window.removeEventListener('online', handleVisibilityOrFocus);
     };
   }, [fetchServerReports]);
 
@@ -521,6 +601,8 @@ export default function App() {
             availableDates={availableDates}
             onLoadSampleData={handleLoadSampleData}
             onGoToUpload={() => setActiveTab('upload')}
+            onTriggerUpdate={handleTriggerUpdate}
+            isUpdating={isUpdating}
           />
         )}
 

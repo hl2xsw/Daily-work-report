@@ -34,6 +34,8 @@ interface DashboardViewProps {
   availableDates: string[];
   onLoadSampleData?: () => void;
   onGoToUpload?: () => void;
+  onTriggerUpdate?: () => void;
+  isUpdating?: boolean;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -43,6 +45,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   availableDates,
   onLoadSampleData,
   onGoToUpload,
+  onTriggerUpdate,
+  isUpdating = false,
 }) => {
   // Filter reports for selected date
   const dateReports = useMemo(() => {
@@ -163,31 +167,49 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   return (
     <div className="space-y-6 pb-12">
       {reports.length === 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 text-amber-900 shadow-xs">
+        <div className="bg-blue-950/90 text-white border border-blue-600/40 rounded-xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-lg">
           <div className="flex items-start space-x-3">
-            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="p-2 bg-blue-600/30 rounded-lg shrink-0 mt-0.5">
+              <AlertCircle className="w-5 h-5 text-blue-300" />
+            </div>
             <div>
-              <h3 className="text-sm font-bold text-amber-900">등록된 동기화 업무보고 데이터가 없습니다</h3>
-              <p className="text-xs text-amber-800 mt-1">
-                현재 수집된 팀별 일지(.xlsx) 데이터가 없습니다. 상단 메뉴의 <strong>[엑셀 파일 수동 업로드]</strong> 탭에서 일지 파일(.xlsx) 또는 폴더를 업로드하여 동기화해 주세요.
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <span>등록된 업무보고 데이터 동기화 대기 중</span>
+                <span className="text-[11px] bg-blue-500/20 text-blue-300 border border-blue-400/30 px-2 py-0.5 rounded-full font-normal">
+                  PC/모바일 연동 시스템
+                </span>
+              </h3>
+              <p className="text-xs text-blue-200/90 mt-1 leading-relaxed">
+                PC에서 엑셀 파일(.xlsx)을 업로드하거나 감시 폴더를 설정하면 스마트폰에 자동 연동됩니다.<br className="hidden sm:inline" />
+                PC에서 이미 업로드하셨다면 하단의 <strong>[🔄 서버에서 최신 일지 불러오기]</strong> 버튼을 눌러주세요.
               </p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {onTriggerUpdate && (
+              <button
+                onClick={onTriggerUpdate}
+                disabled={isUpdating}
+                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-all shadow-md shadow-emerald-950/30 flex items-center gap-1.5 cursor-pointer"
+              >
+                <FileCheck className={`w-4 h-4 ${isUpdating ? 'animate-spin' : ''}`} />
+                <span>{isUpdating ? '서버 통신 중...' : '🔄 서버에서 최신 일지 불러오기'}</span>
+              </button>
+            )}
             {onGoToUpload && (
               <button
                 onClick={onGoToUpload}
-                className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                className="px-3.5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
               >
-                📂 엑셀 파일 수동 업로드
+                📂 PC에서 파일 업로드
               </button>
             )}
             {onLoadSampleData && (
               <button
                 onClick={onLoadSampleData}
-                className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg transition-all border border-slate-700 flex items-center gap-1 cursor-pointer"
               >
-                💡 샘플 데모 데이터 생성 (테스트용)
+                💡 데모 샘플
               </button>
             )}
           </div>
