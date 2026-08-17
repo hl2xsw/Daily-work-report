@@ -204,17 +204,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             {onGoToUpload && (
               <button
                 onClick={onGoToUpload}
-                className="px-3.5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                className="hidden md:flex px-3.5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-all shadow-xs items-center gap-1.5 cursor-pointer"
               >
                 📂 PC에서 파일 업로드
-              </button>
-            )}
-            {onLoadSampleData && (
-              <button
-                onClick={onLoadSampleData}
-                className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg transition-all border border-slate-700 flex items-center gap-1 cursor-pointer"
-              >
-                💡 데모 샘플
               </button>
             )}
           </div>

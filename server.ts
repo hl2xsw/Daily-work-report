@@ -4,8 +4,6 @@ import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 
-import { initialSampleReports } from "./src/data/sampleReports";
-
 async function startServer() {
   const app = express();
   const PORT = 3000;

@@ -48,6 +48,21 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
   const [isTimePickerOpen, setIsTimePickerOpen] = useState<boolean>(false);
   const [tempHour, setTempHour] = useState<number>(17);
   const [tempMinute, setTempMinute] = useState<number>(30);
+  const [isMobile, setIsMobile] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
+  });
+
+  useEffect(() => {
+    const checkMobile = () => {
+      const userAgentMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      const screenMobile = window.innerWidth < 768;
+      setIsMobile(userAgentMobile || screenMobile);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   useEffect(() => {
     const updateClock = () => {
@@ -93,17 +108,17 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
   return (
     <header className="bg-slate-900 text-slate-100 shadow-lg border-b border-slate-800 sticky top-0 z-40">
       {/* Top Status Strip */}
-      <div className="bg-slate-950 px-4 py-1.5 text-xs flex flex-wrap items-center justify-between border-b border-slate-800 text-slate-400">
-        <div className="flex items-center space-x-4">
-          <span className="flex items-center space-x-1.5 text-emerald-400 font-medium">
-            <Clock className="w-3.5 h-3.5" />
+      <div className="bg-slate-950 px-3 sm:px-4 py-1.5 text-xs flex flex-wrap items-center justify-between border-b border-slate-800 text-slate-400 gap-y-1">
+        <div className="flex items-center space-x-2 sm:space-x-4 flex-wrap">
+          <span className="flex items-center space-x-1 text-emerald-400 font-medium">
+            <Clock className="w-3.5 h-3.5 shrink-0" />
             <span>{currentTime}</span>
           </span>
-          <span className="hidden sm:inline border-l border-slate-800 pl-3">
-            마지막 업데이트: <strong className="text-slate-200">{lastSyncTime}</strong>
+          <span className="border-l border-slate-800 pl-2 sm:pl-3 text-slate-300">
+            마지막 업데이트: <strong className="text-emerald-400 font-mono">{lastSyncTime || '-'}</strong>
           </span>
-          <span className="hidden md:inline border-l border-slate-800 pl-3">
-            통합 리포트 데이터: <strong className="text-emerald-400">{totalReportCount}건</strong>
+          <span className="border-l border-slate-800 pl-2 sm:pl-3 text-slate-400">
+            통합 데이터: <strong className="text-emerald-400">{totalReportCount}건</strong>
           </span>
         </div>
 
@@ -341,17 +356,19 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
             <span>검색 & 엑셀 내보내기</span>
           </button>
 
-          <button
-            onClick={() => setActiveTab('upload')}
-            className={`flex items-center space-x-2 px-4 py-2 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${
-              activeTab === 'upload'
-                ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/80'
-            }`}
-          >
-            <UploadCloud className="w-4 h-4" />
-            <span>엑셀 파일 관리 & 폴더 감시</span>
-          </button>
+          {!isMobile && (
+            <button
+              onClick={() => setActiveTab('upload')}
+              className={`hidden md:flex items-center space-x-2 px-4 py-2 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${
+                activeTab === 'upload'
+                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/80'
+              }`}
+            >
+              <UploadCloud className="w-4 h-4" />
+              <span>엑셀 파일 관리 & 폴더 감시 (PC)</span>
+            </button>
+          )}
         </div>
       </div>
     </header>

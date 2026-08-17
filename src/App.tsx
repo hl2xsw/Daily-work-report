@@ -150,6 +150,9 @@ export default function App() {
           },
         });
 
+        const d = new Date();
+        const nowStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+
         if (res.ok) {
           const data = await res.json();
           if (data && Array.isArray(data.reports)) {
@@ -158,37 +161,25 @@ export default function App() {
               ? data.history.filter((h: any) => typeof h === 'string')
               : [];
 
-            const current = reportsRef.current;
-            const currentHist = historyRef.current;
-            const serverSyncTime = data.lastSyncTime && data.lastSyncTime !== '-' ? data.lastSyncTime : '';
+            reportsRef.current = cleanServerReports;
+            setReports(cleanServerReports);
+            historyRef.current = cleanHistory;
+            setImportedFilesHistory(cleanHistory);
+            
+            // Set current real-time fetch time
+            setLastSyncTime(nowStr);
+            localStorage.setItem('last_sync_time', nowStr);
 
-            // Case 1: Server has reports
             if (cleanServerReports.length > 0) {
-              reportsRef.current = cleanServerReports;
-              setReports(cleanServerReports);
-              historyRef.current = cleanHistory;
-              setImportedFilesHistory(cleanHistory);
-              if (serverSyncTime) {
-                setLastSyncTime(serverSyncTime);
-              }
-
               if (isManualTrigger) {
                 showToast(`✅ 서버에서 최신 업무보고 ${cleanServerReports.length}건을 성공적으로 불러왔습니다.`);
               }
               return cleanServerReports;
-            }
-
-            // Case 2: Server is empty, but client has local storage reports -> Push to server
-            if (current.length > 0 && cleanServerReports.length === 0) {
-              await pushReportsToServer(current, currentHist, lastSyncTimeRef.current, false, true);
+            } else {
               if (isManualTrigger) {
-                showToast(`✅ 로컬 업무보고 ${current.length}건을 서버에 저장/동기화했습니다.`);
+                showToast('ℹ️ 서버에 등록된 업무보고 데이터가 없습니다. (PC에서 엑셀 파일을 업로드해 주세요)');
               }
-              return current;
-            }
-
-            if (isManualTrigger) {
-              showToast('ℹ️ 서버에 등록된 업무보고 데이터가 없습니다. (PC에서 엑셀 파일을 업로드해 주세요)');
+              return [];
             }
           }
         } else {
@@ -204,7 +195,7 @@ export default function App() {
         }
       }
     },
-    [pushReportsToServer]
+    []
   );
 
   // Sync on initial mount: Load server reports with automatic retry fallback
@@ -213,7 +204,6 @@ export default function App() {
     let retryTimeout: any = null;
 
     const initDataWithRetry = async (attempt = 1) => {
-      let serverLoaded = false;
       try {
         const cacheBuster = `_t=${Date.now()}_init${attempt}`;
         const res = await fetch(`/api/reports?${cacheBuster}`, {
@@ -233,59 +223,22 @@ export default function App() {
               : [];
             const syncTime = data.lastSyncTime || '-';
 
-            if (cleanReports.length > 0) {
-              if (mounted) {
-                reportsRef.current = cleanReports;
-                setReports(cleanReports);
-                historyRef.current = cleanHist;
-                setImportedFilesHistory(cleanHist);
-                if (syncTime !== '-') setLastSyncTime(syncTime);
-              }
-              serverLoaded = true;
-              return;
+            if (mounted) {
+              reportsRef.current = cleanReports;
+              setReports(cleanReports);
+              historyRef.current = cleanHist;
+              setImportedFilesHistory(cleanHist);
+              if (syncTime !== '-') setLastSyncTime(syncTime);
             }
+            return;
           }
         }
       } catch (e) {
         console.warn(`Init data fetch attempt ${attempt} failed:`, e);
       }
 
-      // Check local storage if server was empty or unreachable
-      const saved = localStorage.getItem('work_reports_data');
-      const savedHistory = localStorage.getItem('imported_files_history');
-      const savedSyncTime = localStorage.getItem('last_sync_time') || '-';
-
-      let localReports: WorkReportItem[] = [];
-      let localHist: string[] = [];
-
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          localReports = Array.isArray(parsed)
-            ? parsed.filter(isValidReportItem)
-            : [];
-        } catch (e) {}
-      }
-      if (savedHistory) {
-        try {
-          const parsedH = JSON.parse(savedHistory);
-          localHist = Array.isArray(parsedH) ? parsedH.filter((h: any) => typeof h === 'string') : [];
-        } catch (e) {}
-      }
-
-      if (localReports.length > 0 && mounted) {
-        reportsRef.current = localReports;
-        setReports(localReports);
-        historyRef.current = localHist;
-        setImportedFilesHistory(localHist);
-        if (savedSyncTime !== '-') setLastSyncTime(savedSyncTime);
-        // Push local data up to server
-        pushReportsToServer(localReports, localHist, savedSyncTime, false, true);
-        serverLoaded = true;
-      }
-
       // If nothing loaded and attempts left, retry in 1.5s
-      if (!serverLoaded && attempt < 3 && mounted) {
+      if (attempt < 3 && mounted) {
         retryTimeout = setTimeout(() => {
           if (mounted) initDataWithRetry(attempt + 1);
         }, 1500);
@@ -298,7 +251,15 @@ export default function App() {
       mounted = false;
       if (retryTimeout) clearTimeout(retryTimeout);
     };
-  }, [pushReportsToServer]);
+  }, []);
+
+  // Prevent mobile device from staying in upload tab
+  useEffect(() => {
+    const isMobileDevice = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
+    if (isMobileDevice && activeTab === 'upload') {
+      setActiveTab('dashboard');
+    }
+  }, [activeTab]);
 
   // Periodic lightweight background sync check (Every 4 seconds) to guarantee real-time updates across PC & Smartphone
   useEffect(() => {
@@ -494,27 +455,6 @@ export default function App() {
     }
   };
 
-  // Load sample data on demand
-  const handleLoadSampleData = async () => {
-    const activeDemoReports = initialSampleReports.map((r) => ({
-      ...r,
-      isSample: false,
-      id: r.id.replace('sample-demo-', 'demo-'),
-    }));
-    setReports(activeDemoReports);
-    const sampleHistory = [
-      "260812 그리드팀 업무 공유.xlsx",
-      "260812 개발팀 업무 공유.xlsx",
-      "260812 운영팀 업무 공유.xlsx",
-      "260812 인프라팀 업무 공유.xlsx"
-    ];
-    setImportedFilesHistory(sampleHistory);
-    const nowStr = new Date().toLocaleTimeString('ko-KR');
-    setLastSyncTime(nowStr);
-    await pushReportsToServer(activeDemoReports, sampleHistory, nowStr);
-    showToast('💡 샘플 데모 데이터가 수집 및 서버 동기화되었습니다.');
-  };
-
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 font-sans flex flex-col antialiased">
       {/* Navbar Header */}
@@ -540,7 +480,6 @@ export default function App() {
             selectedDate={selectedDate}
             setSelectedDate={setSelectedDate}
             availableDates={availableDates}
-            onLoadSampleData={handleLoadSampleData}
             onGoToUpload={() => setActiveTab('upload')}
             onTriggerUpdate={handleTriggerUpdate}
             isUpdating={isUpdating}
@@ -556,7 +495,6 @@ export default function App() {
             onImportReports={handleImportReports}
             onTriggerUpdate={handleTriggerUpdate}
             onClearAllData={handleClearAllData}
-            onLoadSampleData={handleLoadSampleData}
             isUpdating={isUpdating}
             importedFilesHistory={importedFilesHistory}
           />
