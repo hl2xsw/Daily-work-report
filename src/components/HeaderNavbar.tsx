@@ -289,30 +289,15 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
 
         {/* Action Buttons */}
         <div className="flex items-center space-x-2.5 self-end md:self-auto">
-          {/* Server Sync Button / Badge */}
+          {/* Server Sync / Fetch Button */}
           <button
             onClick={onManualUpdate}
             disabled={isUpdating}
-            title="클릭 시 서버의 최신 업무보고 데이터를 즉시 새로고침합니다"
-            className="flex items-center gap-1.5 px-3 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 active:bg-emerald-500/30 border border-emerald-500/40 text-emerald-400 rounded-lg text-xs font-semibold shadow-xs transition-all cursor-pointer group"
+            title="스마트폰 및 PC 어디서나 서버에 저장된 최신 업무보고 데이터를 즉시 불러옵니다."
+            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:bg-emerald-800/80 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-950/30 transition-all cursor-pointer group"
           >
-            <span className="w-2 h-2 rounded-full bg-emerald-400 group-hover:scale-125 transition-transform" />
-            <span>서버 연동 ({totalReportCount}건)</span>
-            <RefreshCw className={`w-3 h-3 ml-0.5 text-emerald-400/80 group-hover:text-emerald-300 ${isUpdating ? 'animate-spin' : ''}`} />
-          </button>
-
-          {/* Manual Update Button (요구사항 5) */}
-          <button
-            onClick={onManualUpdate}
-            disabled={isUpdating}
-            className={`flex items-center space-x-2 px-4 py-2 text-xs font-bold rounded-lg text-white shadow-sm transition-all transform active:scale-95 cursor-pointer ${
-              isUpdating
-                ? 'bg-blue-800 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-500 active:bg-blue-700 shadow-blue-500/20'
-            }`}
-          >
-            <RefreshCw className={`w-4 h-4 ${isUpdating ? 'animate-spin' : ''}`} />
-            <span>{isUpdating ? '동기화 중...' : '업데이트 (신규 파일 수집)'}</span>
+            <RefreshCw className={`w-3.5 h-3.5 ${isUpdating ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
+            <span>{isUpdating ? '서버 통신 중...' : `🔄 서버 최신 일지 불러오기 (${totalReportCount}건)`}</span>
           </button>
         </div>
       </div>

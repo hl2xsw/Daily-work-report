@@ -164,23 +164,16 @@ export default function App() {
 
             // Case 1: Server has reports
             if (cleanServerReports.length > 0) {
-              const serverIds = cleanServerReports.map((r) => r.id).join(',');
-              const currentIds = current.map((r) => r.id).join(',');
-              const serverSync = data.lastSyncTime || '-';
-              const currentSync = lastSyncTimeRef.current;
-
-              if (serverIds !== currentIds || cleanServerReports.length !== current.length || (serverSync !== '-' && serverSync !== currentSync)) {
-                reportsRef.current = cleanServerReports;
-                setReports(cleanServerReports);
-                historyRef.current = cleanHistory;
-                setImportedFilesHistory(cleanHistory);
-                if (serverSyncTime) {
-                  setLastSyncTime(serverSyncTime);
-                }
+              reportsRef.current = cleanServerReports;
+              setReports(cleanServerReports);
+              historyRef.current = cleanHistory;
+              setImportedFilesHistory(cleanHistory);
+              if (serverSyncTime) {
+                setLastSyncTime(serverSyncTime);
               }
 
               if (isManualTrigger) {
-                showToast(`✅ 서버에서 최신 업무보고 ${cleanServerReports.length}건을 성공적으로 갱신했습니다.`);
+                showToast(`✅ 서버에서 최신 업무보고 ${cleanServerReports.length}건을 성공적으로 불러왔습니다.`);
               }
               return cleanServerReports;
             }
@@ -195,7 +188,7 @@ export default function App() {
             }
 
             if (isManualTrigger) {
-              showToast('ℹ️ 서버에 등록된 업무보고 데이터가 없습니다. (PC에서 업로드 필요)');
+              showToast('ℹ️ 서버에 등록된 업무보고 데이터가 없습니다. (PC에서 엑셀 파일을 업로드해 주세요)');
             }
           }
         } else {
@@ -465,57 +458,12 @@ export default function App() {
     };
   }, [pushReportsToServer]);
 
-  // Manual & Auto Update Action from server / watched folder
+  // Manual & Auto Update Action: Strictly fetches live data from server for PC & Smartphone
   const handleTriggerUpdate = React.useCallback(async () => {
     setIsUpdating(true);
-    const folderPath = localStorage.getItem('watched_folder_path') || 'D:\\Data_JAC\\_EV Innovation 부문\\업무일지\\8월';
-
     try {
-      // Always fetch latest server reports first
+      // Fetch latest server reports directly from backend API
       await fetchServerReports(true);
-
-      // Check if running on desktop or mobile
-      const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-
-      // On Desktop: Try scanning using stored DirectoryHandle if permission is active
-      if (!isMobile) {
-        const result = await performFolderScan();
-        if (!result.needFolderPermission) {
-          if (result.reports.length > 0 || result.fileNames.length > 0) {
-            handleImportReports(result.reports, result.fileNames);
-          }
-          return;
-        }
-
-        // If directory handle needs user gesture or is missing on desktop:
-        if ('showDirectoryPicker' in window) {
-          try {
-            showToast(`📂 감시 폴더 [${folderPath}] 승인을 위해 폴더 선택 창을 엽니다...`);
-            // @ts-ignore
-            const handle = await window.showDirectoryPicker();
-            if (handle) {
-              await saveDirectoryHandle(handle);
-              localStorage.setItem('watched_folder_path', handle.name);
-
-              const entries = await scanDirectoryHandleRecursively(handle);
-              const files = entries.map((e) => e.file);
-              const { reports: scannedReports, fileNames } = await parseFileList(files);
-
-              if (fileNames.length > 0) {
-                handleImportReports(scannedReports, fileNames);
-              } else {
-                showToast(`ℹ️ 선택한 폴더 [${handle.name}]에 엑셀 업무일지 파일이 존재하지 않습니다.`);
-              }
-              return;
-            }
-          } catch (pickerErr: any) {
-            if (pickerErr.name === 'AbortError') {
-              showToast(`ℹ️ 폴더 선택이 취소되었습니다. 서버 데이터(${reportsRef.current.length}건)로 갱신되었습니다.`);
-              return;
-            }
-          }
-        }
-      }
     } catch (err: any) {
       console.error('Update action failed:', err);
       showToast(`⚠️ 서버 데이터 동기화 중 오류가 발생했습니다.`);
@@ -524,7 +472,7 @@ export default function App() {
       setLastSyncTime(nowStr);
       setIsUpdating(false);
     }
-  }, [fetchServerReports, handleImportReports]);
+  }, [fetchServerReports]);
 
   // Clear all data manually if user wants a clean slate
   const handleClearAllData = async () => {

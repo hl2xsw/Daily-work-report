@@ -140,10 +140,10 @@ async function startServer() {
 
     if (Array.isArray(reports)) {
       const cleanIncoming = reports.filter(isValidReport);
-      if (overwrite === true) {
-        // Direct replacement from authoritative sender (e.g. PC uploading/updating reports)
+      if (overwrite === true && cleanIncoming.length > 0) {
+        // Direct replacement from authoritative sender with actual reports (e.g. PC uploading/updating reports)
         store.reports = cleanIncoming;
-      } else {
+      } else if (cleanIncoming.length > 0) {
         // Merge incoming reports with store.reports cleanly
         const existingMap = new Map<string, any>();
         

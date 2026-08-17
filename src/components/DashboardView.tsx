@@ -25,6 +25,7 @@ import {
   ShieldAlert,
   TrendingUp,
   FileCheck,
+  RefreshCw,
 } from 'lucide-react';
 
 interface DashboardViewProps {
@@ -230,20 +231,35 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </span>
         </div>
 
-        <div className="flex items-center space-x-2">
-          <label className="text-xs font-semibold text-slate-600">기준 일자:</label>
-          <select
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="bg-slate-50 border border-slate-300 text-slate-800 text-xs font-semibold rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-emerald-500 outline-none"
-          >
-            <option value="">전체 일자 통합</option>
-            {availableDates.map((d) => (
-              <option key={d} value={d}>
-                {d} 일지
-              </option>
-            ))}
-          </select>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center space-x-2">
+            <label className="text-xs font-semibold text-slate-600">기준 일자:</label>
+            <select
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="bg-slate-50 border border-slate-300 text-slate-800 text-xs font-semibold rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-emerald-500 outline-none"
+            >
+              <option value="">전체 일자 통합</option>
+              {availableDates.map((d) => (
+                <option key={d} value={d}>
+                  {d} 일지
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {onTriggerUpdate && (
+            <button
+              onClick={onTriggerUpdate}
+              disabled={isUpdating}
+              title="서버에서 최신 업무보고 데이터 불러오기"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-all shadow-xs cursor-pointer"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isUpdating ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">서버 데이터 새로고침</span>
+              <span className="sm:hidden">새로고침</span>
+            </button>
+          )}
         </div>
       </div>
 
