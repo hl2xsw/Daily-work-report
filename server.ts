@@ -28,7 +28,7 @@ async function startServer() {
   const isValidReport = (r: any) => {
     if (!r || typeof r !== 'object') return false;
     if (typeof r.id !== 'string' || !r.id) return false;
-    if (r.id.startsWith('sample-') || r.id.startsWith('demo-') || r.isSample === true) return false;
+    if (r.id.startsWith('sample-') || r.id.startsWith('demo-') || r.id.startsWith('rep-2026-') || r.isSample === true) return false;
     return true;
   };
 
@@ -80,11 +80,9 @@ async function startServer() {
 
   const saveDataToDisk = () => {
     try {
-      if (store.reports.length > 0) {
-        const dataStr = JSON.stringify(store, null, 2);
-        fs.writeFileSync(dataFilePath, dataStr, "utf-8");
-        fs.writeFileSync(backupFilePath, dataStr, "utf-8");
-      }
+      const dataStr = JSON.stringify(store, null, 2);
+      fs.writeFileSync(dataFilePath, dataStr, "utf-8");
+      fs.writeFileSync(backupFilePath, dataStr, "utf-8");
     } catch (e) {
       console.error("Error writing store to disk:", e);
     }

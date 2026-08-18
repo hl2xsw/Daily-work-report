@@ -12,13 +12,12 @@ import {
   scanDirectoryHandleRecursively,
   parseFileList,
 } from './utils/folderScanner';
-import { defaultTeamReports } from './data/defaultReports';
 import { CheckCircle2 } from 'lucide-react';
 
 const isValidReportItem = (r: any): r is WorkReportItem => {
   if (!r || typeof r !== 'object') return false;
   if (typeof r.id !== 'string' || !r.id) return false;
-  if (r.id.startsWith('sample-') || r.id.startsWith('demo-') || r.isSample === true) return false;
+  if (r.id.startsWith('sample-') || r.id.startsWith('demo-') || r.id.startsWith('rep-2026-') || r.isSample === true) return false;
   return true;
 };
 
@@ -30,13 +29,16 @@ export default function App() {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
           const clean = parsed.filter(isValidReportItem);
-          if (clean.length > 0) return clean;
+          if (clean.length !== parsed.length) {
+            localStorage.setItem('work_reports_data', JSON.stringify(clean));
+          }
+          return clean;
         }
       }
     } catch (e) {
       console.error('Failed to load saved reports', e);
     }
-    return defaultTeamReports;
+    return [];
   });
 
   const [activeTab, setActiveTab] = useState<'dashboard' | 'table' | 'search' | 'upload'>('dashboard');
