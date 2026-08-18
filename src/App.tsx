@@ -18,9 +18,8 @@ import { CheckCircle2 } from 'lucide-react';
 const isValidReportItem = (r: any): r is WorkReportItem => {
   if (!r || typeof r !== 'object') return false;
   if (typeof r.id !== 'string' || !r.id) return false;
-  // Strictly filter out any sample or legacy demo records
+  // Filter out any legacy sample/demo records
   if (r.id.startsWith('sample-') || r.id.startsWith('demo-') || r.isSample === true) return false;
-  if (r.author === '이그리드' || String(r.todayTask || '').includes('전력망 안정화')) return false;
   return true;
 };
 

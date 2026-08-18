@@ -29,7 +29,6 @@ async function startServer() {
     if (!r || typeof r !== 'object') return false;
     if (typeof r.id !== 'string' || !r.id) return false;
     if (r.id.startsWith('sample-') || r.id.startsWith('demo-') || r.isSample === true) return false;
-    if (r.author === '이그리드' || String(r.todayTask || '').includes('전력망 안정화')) return false;
     return true;
   };
 
