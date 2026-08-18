@@ -37,7 +37,7 @@ async function startServer() {
       if (fs.existsSync(dataFilePath)) {
         const raw = fs.readFileSync(dataFilePath, "utf-8");
         const parsed = JSON.parse(raw);
-        if (parsed && Array.isArray(parsed.reports)) {
+        if (parsed && Array.isArray(parsed.reports) && parsed.reports.length > 0) {
           const cleanReports = parsed.reports.filter(isValidReport);
           const cleanHistory = Array.isArray(parsed.history) ? parsed.history.filter((h: any) => typeof h === 'string') : [];
           return {
@@ -55,7 +55,7 @@ async function startServer() {
       if (fs.existsSync(backupFilePath)) {
         const raw = fs.readFileSync(backupFilePath, "utf-8");
         const parsed = JSON.parse(raw);
-        if (parsed && Array.isArray(parsed.reports)) {
+        if (parsed && Array.isArray(parsed.reports) && parsed.reports.length > 0) {
           const cleanReports = parsed.reports.filter(isValidReport);
           const cleanHistory = Array.isArray(parsed.history) ? parsed.history.filter((h: any) => typeof h === 'string') : [];
           return {
@@ -80,9 +80,9 @@ async function startServer() {
 
   const saveDataToDisk = () => {
     try {
-      const dataStr = JSON.stringify(store, null, 2);
-      fs.writeFileSync(dataFilePath, dataStr, "utf-8");
       if (store.reports.length > 0) {
+        const dataStr = JSON.stringify(store, null, 2);
+        fs.writeFileSync(dataFilePath, dataStr, "utf-8");
         fs.writeFileSync(backupFilePath, dataStr, "utf-8");
       }
     } catch (e) {
@@ -95,6 +95,11 @@ async function startServer() {
 
   // API to get all work reports (for PC and Mobile Devices)
   app.get("/api/reports", (req, res) => {
+    // If store is in-memory empty, try re-reading disk
+    if (store.reports.length === 0) {
+      store = loadDataFromDisk();
+    }
+
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
     res.setHeader("Pragma", "no-cache");
     res.setHeader("Expires", "0");
