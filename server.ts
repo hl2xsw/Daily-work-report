@@ -92,7 +92,7 @@ async function startServer() {
   saveDataToDisk();
 
   // API to get all work reports (for PC and Mobile Devices)
-  app.get("/api/reports", (req, res) => {
+  app.get(["/api/reports", "/api/reports/"], (req, res) => {
     // If store is in-memory empty, try re-reading disk
     if (store.reports.length === 0) {
       store = loadDataFromDisk();
@@ -112,7 +112,7 @@ async function startServer() {
   });
 
   // Fast lightweight status ping endpoint
-  app.get("/api/reports/status", (req, res) => {
+  app.get(["/api/reports/status", "/api/reports/status/"], (req, res) => {
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
     res.json({
       count: store.reports.length,
@@ -123,7 +123,7 @@ async function startServer() {
   });
 
   // API to save/sync work reports across all devices with smart deduplicated merging
-  app.post("/api/reports", (req, res) => {
+  app.post(["/api/reports", "/api/reports/"], (req, res) => {
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
     const { reports, history, lastSyncTime, forceClear, overwrite } = req.body || {};
 
@@ -196,7 +196,7 @@ async function startServer() {
   });
 
   // API to clear all work reports
-  app.delete("/api/reports", (req, res) => {
+  app.delete(["/api/reports", "/api/reports/"], (req, res) => {
     store = {
       reports: [],
       history: [],
@@ -207,12 +207,12 @@ async function startServer() {
   });
 
   // Health check API
-  app.get("/api/health", (req, res) => {
+  app.get(["/api/health", "/api/health/"], (req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
   // AI Summary API endpoint for executive reports
-  app.post("/api/ai-summary", async (req, res) => {
+  app.post(["/api/ai-summary", "/api/ai-summary/"], async (req, res) => {
     try {
       const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
@@ -248,27 +248,19 @@ async function startServer() {
     }
   });
 
-  // Serve static / SPA frontend
-  const distPath = path.join(process.cwd(), "dist");
-  if (fs.existsSync(distPath)) {
-    app.use(express.static(distPath));
-  }
-
-  if (process.env.NODE_ENV === "production") {
-    app.get("*", (req, res) => {
-      const indexPath = path.join(distPath, "index.html");
-      if (fs.existsSync(indexPath)) {
-        res.sendFile(indexPath);
-      } else {
-        res.status(404).send("Application build not found. Please run build.");
-      }
-    });
-  } else {
+  // Vite middleware for development vs static serve for production
+  if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(process.cwd(), "dist");
+    app.use(express.static(distPath));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
+    });
   }
 
   app.listen(PORT, "0.0.0.0", () => {
