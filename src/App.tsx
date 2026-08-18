@@ -17,8 +17,7 @@ import { CheckCircle2 } from 'lucide-react';
 const isValidReportItem = (r: any): r is WorkReportItem => {
   if (!r || typeof r !== 'object') return false;
   if (typeof r.id !== 'string' || !r.id) return false;
-  if (r.id.startsWith('sample-') || r.id.startsWith('demo-') || r.id.startsWith('rep-2026-') || r.isSample === true) return false;
-  return true;
+  return Boolean(r.author || r.todayTask || r.team || r.date);
 };
 
 export default function App() {
@@ -439,6 +438,126 @@ export default function App() {
     }
   }, [fetchServerReports]);
 
+  // Load sample 3 teams data for easy testing and instant smartphone sync
+  const handleLoadSampleData = async () => {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    const dateStr = `${yyyy}-${mm}-${dd}`;
+    const displayDateStr = `${yyyy}년 ${mm}월 ${dd}일`;
+
+    const sampleItems: WorkReportItem[] = [
+      {
+        id: `sample-${dateStr}-grid-1`,
+        date: dateStr,
+        displayDate: displayDateStr,
+        department: 'EV Innovation 부문',
+        team: '그리드팀',
+        author: '김그리드',
+        todayTask: '전력 그리드 변전소 연계 통신 모듈 펌웨어 업데이트 및 현장 부하 시험',
+        taskResult: '정상 완료 (통신 지연 12ms 이하 달성)',
+        tomorrowTask: '신재생 연계 ESS 인버터 제어 알고리즘 검증',
+        status: '완료',
+        issues: '특이사항 없음',
+        remarks: '정상 작동 확인',
+        isVacationToday: false,
+        isVacationTomorrow: false,
+        sourceFileName: '260803 그리드팀 업무 공유.xlsx',
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        id: `sample-${dateStr}-grid-2`,
+        date: dateStr,
+        displayDate: displayDateStr,
+        department: 'EV Innovation 부문',
+        team: '그리드팀',
+        author: '이전력',
+        todayTask: '하계 전력 피크 대비 원격 차단기 자동 트립 시뮬레이션',
+        taskResult: '진행중 (70% 완료)',
+        tomorrowTask: '시뮬레이션 결과 리포트 작성 및 배포',
+        status: '진행중',
+        issues: '3구역 차단기 응답 지연 발생 (원인 분석 중)',
+        remarks: '익일 오전 연차 예정',
+        isVacationToday: false,
+        isVacationTomorrow: true,
+        vacationTypeTomorrow: '오전반차',
+        sourceFileName: '260803 그리드팀 업무 공유.xlsx',
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        id: `sample-${dateStr}-dev-1`,
+        date: dateStr,
+        displayDate: displayDateStr,
+        department: 'EV Innovation 부문',
+        team: '개발팀',
+        author: '박개발',
+        todayTask: '실시간 관제 대시보드 웹 소켓 API 서버 v2.4 릴리즈 및 배포',
+        taskResult: '배포 완료 및 모니터링 중',
+        tomorrowTask: '스마트폰 반응형 UI 렌더링 성능 튜닝',
+        status: '완료',
+        issues: '없음',
+        remarks: '금일 연차',
+        isVacationToday: true,
+        vacationTypeToday: '연차',
+        isVacationTomorrow: false,
+        sourceFileName: '260803 개발팀 업무 공유.xlsx',
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        id: `sample-${dateStr}-dev-2`,
+        date: dateStr,
+        displayDate: displayDateStr,
+        department: 'EV Innovation 부문',
+        team: '개발팀',
+        author: '최코딩',
+        todayTask: '엑셀 자동 파싱 모듈 컬럼 매핑 유연성 강화 (A~F열 자동 인식)',
+        taskResult: '개발 완료 및 단위 테스트 통과',
+        tomorrowTask: '서버 데이터 동기화 안정화 및 캐시 무효화 적용',
+        status: '완료',
+        issues: '없음',
+        remarks: '정상',
+        isVacationToday: false,
+        isVacationTomorrow: false,
+        sourceFileName: '260803 개발팀 업무 공유.xlsx',
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        id: `sample-${dateStr}-ops-1`,
+        date: dateStr,
+        displayDate: displayDateStr,
+        department: 'EV Innovation 부문',
+        team: '운영팀',
+        author: '정운영',
+        todayTask: '전국 충전소 인프라 24시간 가동률 점검 및 비상 발전기 루틴 테스트',
+        taskResult: '가동률 99.8% 유지',
+        tomorrowTask: '고객 센터 접수 장애 티켓 14건 심층 분석 및 조치',
+        status: '진행중',
+        issues: '강남구 2번 충전기 결제 통신 간헐적 단절 (현장 출동 점검 필요)',
+        remarks: '이슈 확인 요망',
+        isVacationToday: false,
+        isVacationTomorrow: false,
+        sourceFileName: '260803 운영팀 업무 공유.xlsx',
+        updatedAt: new Date().toISOString(),
+      },
+    ];
+
+    const sampleFiles = [
+      '260803 그리드팀 업무 공유.xlsx',
+      '260803 개발팀 업무 공유.xlsx',
+      '260803 운영팀 업무 공유.xlsx',
+    ];
+
+    setReports(sampleItems);
+    setImportedFilesHistory(sampleFiles);
+    setSelectedDate(dateStr);
+    const nowStr = new Date().toLocaleTimeString('ko-KR');
+    setLastSyncTime(nowStr);
+
+    await pushReportsToServer(sampleItems, sampleFiles, nowStr, false, true);
+    showToast('🚀 샘플 3개팀 업무일지 5건이 스마트폰 표시용 경량 데이터로 서버에 성공적으로 연동 저장되었습니다!');
+  };
+
   // Clear all data manually if user wants a clean slate
   const handleClearAllData = async () => {
     if (window.confirm('정말로 수집된 모든 업무일지 데이터와 이력을 초기화하시겠습니까?')) {
@@ -499,6 +618,7 @@ export default function App() {
             onImportReports={handleImportReports}
             onTriggerUpdate={handleTriggerUpdate}
             onClearAllData={handleClearAllData}
+            onLoadSampleData={handleLoadSampleData}
             isUpdating={isUpdating}
             importedFilesHistory={importedFilesHistory}
           />

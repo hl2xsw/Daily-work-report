@@ -28,8 +28,8 @@ async function startServer() {
   const isValidReport = (r: any) => {
     if (!r || typeof r !== 'object') return false;
     if (typeof r.id !== 'string' || !r.id) return false;
-    if (r.id.startsWith('sample-') || r.id.startsWith('demo-') || r.id.startsWith('rep-2026-') || r.isSample === true) return false;
-    return true;
+    // Keep all real parsed work reports and user data (only reject null/broken objects)
+    return Boolean(r.author || r.todayTask || r.team);
   };
 
   const loadDataFromDisk = () => {

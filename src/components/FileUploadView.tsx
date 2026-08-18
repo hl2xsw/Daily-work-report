@@ -121,17 +121,41 @@ export const FileUploadView: React.FC<FileUploadViewProps> = ({
   return (
     <div className="space-y-6 pb-12">
       {/* Mobile & PC Sync Info Banner */}
-      <div className="bg-gradient-to-r from-blue-900/90 to-indigo-900/90 text-white rounded-xl p-4 border border-blue-700/50 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 font-bold text-xs text-blue-200">
-            <span className="flex h-2 w-2 relative">
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
-            </span>
-            <span>📱 스마트폰 / 모바일 기기 접속 안내</span>
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 text-white rounded-2xl p-5 border border-indigo-800/60 shadow-md">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="space-y-1.5 max-w-3xl">
+            <div className="flex items-center gap-2 font-bold text-xs text-indigo-300">
+              <span className="flex h-2.5 w-2.5 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+              </span>
+              <span>📱 스마트폰 전용 초경량 데이터 실시간 연동 시스템</span>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              PC 브라우저에서 폴더나 엑셀 파일을 선택하면, <strong>대용량 엑셀 파일 원본은 서버에 올리지 않고</strong> 스마트폰에서 1초 만에 열리는 <strong>스마트폰 최적화 경량 데이터(JSON)로 자동 변환</strong>되어 서버에 안전하게 연동 저장됩니다.
+            </p>
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                ✓ 엑셀 원본 파일 업로드 없음 (초경량 데이터만 전송)
+              </span>
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-blue-500/20 text-blue-300 px-2.5 py-0.5 rounded-full border border-blue-500/30">
+                ✓ 스마트폰 접속 시 초고속 0.1초 즉시 동기화
+              </span>
+            </div>
           </div>
-          <p className="text-xs text-slate-200 leading-relaxed">
-            스마트폰에서 웹페이지를 열거나 브라우저로 돌아올 때 <strong>서버의 최신 업무보고 데이터로 자동 갱신</strong>되며, 상단의 [업데이트] 버튼을 탭하여 언제든지 즉시 갱신할 수 있습니다.
-          </p>
+
+          <div className="flex sm:flex-col items-center gap-2 w-full md:w-auto">
+            <button
+              onClick={onTriggerUpdate}
+              disabled={isUpdating}
+              className={`w-full sm:w-auto flex items-center justify-center space-x-2 px-4 py-2.5 text-xs font-bold rounded-xl text-white shadow-md transition-all transform active:scale-95 whitespace-nowrap ${
+                isUpdating ? 'bg-indigo-800' : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-500/20'
+              }`}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isUpdating ? 'animate-spin' : ''}`} />
+              <span>{isUpdating ? '서버 동기화 중...' : '🔄 서버 최신 동기화'}</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -147,16 +171,27 @@ export const FileUploadView: React.FC<FileUploadViewProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={onTriggerUpdate}
-          disabled={isUpdating}
-          className={`flex items-center space-x-2 px-5 py-2.5 text-xs font-bold rounded-xl text-white shadow-sm transition-all transform active:scale-95 ${
-            isUpdating ? 'bg-blue-800' : 'bg-blue-600 hover:bg-blue-500 shadow-blue-500/20'
-          }`}
-        >
-          <RefreshCw className={`w-4 h-4 ${isUpdating ? 'animate-spin' : ''}`} />
-          <span>{isUpdating ? '폴더 수집 중...' : '신규 파일 수집 (업데이트 버튼)'}</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {onLoadSampleData && (
+            <button
+              onClick={onLoadSampleData}
+              className="flex items-center space-x-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 transition cursor-pointer"
+            >
+              <span>📊 샘플 3개팀 일지 채우기 (동기화 테스트)</span>
+            </button>
+          )}
+
+          <button
+            onClick={onTriggerUpdate}
+            disabled={isUpdating}
+            className={`flex items-center space-x-2 px-5 py-2 text-xs font-bold rounded-xl text-white shadow-sm transition-all transform active:scale-95 cursor-pointer ${
+              isUpdating ? 'bg-blue-800' : 'bg-blue-600 hover:bg-blue-500 shadow-blue-500/20'
+            }`}
+          >
+            <RefreshCw className={`w-4 h-4 ${isUpdating ? 'animate-spin' : ''}`} />
+            <span>{isUpdating ? '폴더 수집 중...' : '신규 파일 수집 (업데이트 버튼)'}</span>
+          </button>
+        </div>
       </div>
 
       {/* Requirement 1 & 4: Specified Folder Path & Excel File Upload */}
