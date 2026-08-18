@@ -273,7 +273,15 @@ async function startServer() {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+      const distIndexPath = path.join(distPath, "index.html");
+      const rootIndexPath = path.join(process.cwd(), "index.html");
+      if (fs.existsSync(distIndexPath)) {
+        res.sendFile(distIndexPath);
+      } else if (fs.existsSync(rootIndexPath)) {
+        res.sendFile(rootIndexPath);
+      } else {
+        res.status(404).send("Application HTML not found.");
+      }
     });
   }
 

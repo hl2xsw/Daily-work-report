@@ -154,6 +154,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   // Data for Charts
   const chartData = useMemo(() => {
+    if (!teamStatsMap || teamStatsMap.length === 0) {
+      return [
+        { team: '그리드팀', 완료: 0, 진행중: 0, 지연대기: 0, 이슈: 0 },
+        { team: '개발팀', 완료: 0, 진행중: 0, 지연대기: 0, 이슈: 0 },
+        { team: '운영팀', 완료: 0, 진행중: 0, 지연대기: 0, 이슈: 0 },
+      ];
+    }
     return teamStatsMap.map((s) => ({
       team: s.team,
       완료: s.completedTasks,
@@ -163,11 +170,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     }));
   }, [teamStatsMap]);
 
-  const pieData = [
-    { name: '완료', value: overallStats.completed, color: '#10b981' },
-    { name: '진행중', value: overallStats.inProgress, color: '#0284c7' },
-    { name: '지연/대기', value: overallStats.delayed, color: '#f59e0b' },
-  ];
+  const pieData = useMemo(() => {
+    const total = overallStats.completed + overallStats.inProgress + overallStats.delayed;
+    if (total === 0) {
+      return [{ name: '대기', value: 1, color: '#cbd5e1' }];
+    }
+    return [
+      { name: '완료', value: overallStats.completed, color: '#10b981' },
+      { name: '진행중', value: overallStats.inProgress, color: '#0284c7' },
+      { name: '지연/대기', value: overallStats.delayed, color: '#f59e0b' },
+    ].filter((item) => item.value > 0);
+  }, [overallStats]);
 
   return (
     <div className="space-y-6 pb-12">
