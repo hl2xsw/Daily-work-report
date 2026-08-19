@@ -185,41 +185,36 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   return (
     <div className="space-y-6 pb-12">
       {reports.length === 0 && (
-        <div className="bg-blue-950/90 text-white border border-blue-600/40 rounded-xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-lg">
+        <div className="bg-slate-900 text-white border border-slate-700/80 rounded-xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-md">
           <div className="flex items-start space-x-3">
             <div className="p-2 bg-blue-600/30 rounded-lg shrink-0 mt-0.5">
-              <AlertCircle className="w-5 h-5 text-blue-300" />
+              <AlertCircle className="w-5 h-5 text-blue-400" />
             </div>
             <div>
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <span>등록된 업무보고 데이터 동기화 대기 중</span>
-                <span className="text-[11px] bg-blue-500/20 text-blue-300 border border-blue-400/30 px-2 py-0.5 rounded-full font-normal">
-                  PC/모바일 연동 시스템
-                </span>
+                <span>등록된 업무보고 데이터가 없습니다</span>
               </h3>
-              <p className="text-xs text-blue-200/90 mt-1 leading-relaxed">
-                PC에서 엑셀 파일(.xlsx)을 업로드하거나 감시 폴더를 설정하면 스마트폰에 자동 연동됩니다.<br className="hidden sm:inline" />
-                PC에서 이미 업로드하셨다면 하단의 <strong>[🔄 서버에서 최신 일지 불러오기]</strong> 버튼을 눌러주세요.
+              <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                엑셀 파일(.xlsx)을 업로드하거나 감시 폴더를 설정하여 팀별 일일 업무 보고서를 수집하세요.<br className="hidden sm:inline" />
+                또는 [📊 샘플 데이터 채우기]로 시스템을 즉시 테스트해볼 수 있습니다.
               </p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
-            {onTriggerUpdate && (
+            {onLoadSampleData && (
               <button
-                onClick={onTriggerUpdate}
-                disabled={isUpdating}
-                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-all shadow-md shadow-emerald-950/30 flex items-center gap-1.5 cursor-pointer"
+                onClick={onLoadSampleData}
+                className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white text-xs font-semibold rounded-lg transition-all cursor-pointer"
               >
-                <FileCheck className={`w-4 h-4 ${isUpdating ? 'animate-spin' : ''}`} />
-                <span>{isUpdating ? '서버 통신 중...' : '🔄 서버에서 최신 일지 불러오기'}</span>
+                📊 샘플 데이터 채우기
               </button>
             )}
             {onGoToUpload && (
               <button
                 onClick={onGoToUpload}
-                className="hidden md:flex px-3.5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-all shadow-xs items-center gap-1.5 cursor-pointer"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
               >
-                📂 PC에서 파일 업로드
+                📂 엑셀 파일 관리 및 폴더 지정
               </button>
             )}
           </div>

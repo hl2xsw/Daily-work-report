@@ -29,8 +29,6 @@ interface HeaderNavbarProps {
   autoSyncTime: string;
   setAutoSyncTime: (val: string) => void;
   nextSyncTimeStr: string;
-  onOpenServerConfig?: () => void;
-  isStaticMode?: boolean;
 }
 
 export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
@@ -45,28 +43,11 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
   autoSyncTime,
   setAutoSyncTime,
   nextSyncTimeStr,
-  onOpenServerConfig,
-  isStaticMode = false,
 }) => {
   const [currentTime, setCurrentTime] = useState<string>('');
   const [isTimePickerOpen, setIsTimePickerOpen] = useState<boolean>(false);
   const [tempHour, setTempHour] = useState<number>(17);
   const [tempMinute, setTempMinute] = useState<number>(30);
-  const [isMobile, setIsMobile] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    return /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
-  });
-
-  useEffect(() => {
-    const checkMobile = () => {
-      const userAgentMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      const screenMobile = window.innerWidth < 768;
-      setIsMobile(userAgentMobile || screenMobile);
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
 
   useEffect(() => {
     const updateClock = () => {
@@ -308,31 +289,15 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
 
         {/* Action Buttons */}
         <div className="flex items-center space-x-2.5 self-end md:self-auto">
-          {/* Server Config Button */}
-          {onOpenServerConfig && (
-            <button
-              onClick={onOpenServerConfig}
-              title="서버 연동 상태 확인 및 Cloud Run 백엔드 연결 설정"
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer ${
-                isStaticMode
-                  ? 'bg-amber-950/70 border-amber-700/80 text-amber-300 hover:bg-amber-900/80'
-                  : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
-              }`}
-            >
-              <Settings className="w-3.5 h-3.5 text-blue-400" />
-              <span>{isStaticMode ? '🌐 로컬/서버 설정' : '🌐 서버 연동 설정'}</span>
-            </button>
-          )}
-
-          {/* Server Sync / Fetch Button */}
+          {/* Data Refresh & Scan Button */}
           <button
             onClick={onManualUpdate}
             disabled={isUpdating}
-            title="스마트폰 및 PC 어디서나 서버에 저장된 최신 업무보고 데이터를 즉시 불러옵니다."
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:bg-emerald-800/80 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-950/30 transition-all cursor-pointer group"
+            title="지정된 감시 폴더를 재스캔하고 일일 업무 보고 데이터를 갱신합니다."
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 disabled:bg-blue-800/80 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-950/30 transition-all cursor-pointer group"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isUpdating ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
-            <span>{isUpdating ? '동기화 중...' : `🔄 최신 일지 동기화 (${totalReportCount}건)`}</span>
+            <span>{isUpdating ? '데이터 갱신 중...' : `🔄 데이터 갱신 / 폴더 스캔 (${totalReportCount}건)`}</span>
           </button>
         </div>
       </div>
@@ -342,7 +307,7 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
         <div className="max-w-7xl mx-auto flex space-x-1.5 overflow-x-auto py-1.5">
           <button
             onClick={() => setActiveTab('dashboard')}
-            className={`flex items-center space-x-2 px-4 py-2 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${
+            className={`flex items-center space-x-2 px-4 py-2 text-xs font-bold rounded-lg transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'dashboard'
                 ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/80'
@@ -354,7 +319,7 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
 
           <button
             onClick={() => setActiveTab('table')}
-            className={`flex items-center space-x-2 px-4 py-2 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${
+            className={`flex items-center space-x-2 px-4 py-2 text-xs font-bold rounded-lg transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'table'
                 ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/80'
@@ -366,7 +331,7 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
 
           <button
             onClick={() => setActiveTab('search')}
-            className={`flex items-center space-x-2 px-4 py-2 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${
+            className={`flex items-center space-x-2 px-4 py-2 text-xs font-bold rounded-lg transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'search'
                 ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/80'
@@ -376,19 +341,17 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
             <span>검색 & 엑셀 내보내기</span>
           </button>
 
-          {!isMobile && (
-            <button
-              onClick={() => setActiveTab('upload')}
-              className={`hidden md:flex items-center space-x-2 px-4 py-2 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${
-                activeTab === 'upload'
-                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/80'
-              }`}
-            >
-              <UploadCloud className="w-4 h-4" />
-              <span>엑셀 파일 관리 & 폴더 감시 (PC)</span>
-            </button>
-          )}
+          <button
+            onClick={() => setActiveTab('upload')}
+            className={`flex items-center space-x-2 px-4 py-2 text-xs font-bold rounded-lg transition-all whitespace-nowrap cursor-pointer ${
+              activeTab === 'upload'
+                ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/80'
+            }`}
+          >
+            <UploadCloud className="w-4 h-4" />
+            <span>엑셀 파일 관리 & 폴더 감시</span>
+          </button>
         </div>
       </div>
     </header>

@@ -24,8 +24,6 @@ interface FileUploadViewProps {
   onTriggerUpdate: () => void;
   onClearAllData?: () => void;
   onLoadSampleData?: () => void;
-  onOpenServerConfig?: () => void;
-  isStaticMode?: boolean;
   isUpdating: boolean;
   importedFilesHistory: string[];
 }
@@ -35,8 +33,6 @@ export const FileUploadView: React.FC<FileUploadViewProps> = ({
   onTriggerUpdate,
   onClearAllData,
   onLoadSampleData,
-  onOpenServerConfig,
-  isStaticMode = false,
   isUpdating,
   importedFilesHistory,
 }) => {
@@ -124,62 +120,15 @@ export const FileUploadView: React.FC<FileUploadViewProps> = ({
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Mobile & PC Sync Info Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 text-white rounded-2xl p-5 border border-indigo-800/60 shadow-md">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div className="space-y-1.5 max-w-3xl">
-            <div className="flex items-center gap-2 font-bold text-xs text-indigo-300">
-              <span className="flex h-2.5 w-2.5 relative">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-              </span>
-              <span>📱 스마트폰 전용 초경량 데이터 실시간 연동 시스템</span>
-            </div>
-            <p className="text-xs text-slate-300 leading-relaxed">
-              PC 브라우저에서 폴더나 엑셀 파일을 선택하면, <strong>대용량 엑셀 파일 원본은 서버에 올리지 않고</strong> 스마트폰에서 1초 만에 열리는 <strong>스마트폰 최적화 경량 데이터(JSON)로 자동 변환</strong>되어 서버에 안전하게 연동 저장됩니다.
-            </p>
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
-                ✓ 엑셀 원본 파일 업로드 없음 (초경량 데이터만 전송)
-              </span>
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-blue-500/20 text-blue-300 px-2.5 py-0.5 rounded-full border border-blue-500/30">
-                ✓ 스마트폰 접속 시 초고속 0.1초 즉시 동기화
-              </span>
-            </div>
-          </div>
-
-          <div className="flex sm:flex-col items-center gap-2 w-full md:w-auto">
-            {onOpenServerConfig && (
-              <button
-                onClick={onOpenServerConfig}
-                className="w-full sm:w-auto flex items-center justify-center space-x-1.5 px-3.5 py-2 text-xs font-bold rounded-xl text-indigo-100 bg-indigo-900/80 hover:bg-indigo-800 border border-indigo-700/80 shadow-xs transition cursor-pointer whitespace-nowrap"
-              >
-                <span>🌐 서버 연동 설정</span>
-              </button>
-            )}
-            <button
-              onClick={onTriggerUpdate}
-              disabled={isUpdating}
-              className={`w-full sm:w-auto flex items-center justify-center space-x-2 px-4 py-2.5 text-xs font-bold rounded-xl text-white shadow-md transition-all transform active:scale-95 whitespace-nowrap cursor-pointer ${
-                isUpdating ? 'bg-indigo-800' : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-500/20'
-              }`}
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isUpdating ? 'animate-spin' : ''}`} />
-              <span>{isUpdating ? '서버 동기화 중...' : '🔄 최신 동기화'}</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
       {/* Header Info */}
       <div className="bg-white rounded-xl shadow-xs border border-slate-200/80 p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
             <UploadCloud className="w-5 h-5 text-blue-600" />
-            각 팀별 업무보고(엑셀) 폴더 감시 및 자동 동기화
+            각 팀별 업무보고(엑셀) 폴더 감시 및 데이터 수집
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            지정된 폴더 및 하위 폴더에서 팀별 일지(`260803 그리드팀 업무 공유.xlsx` 등)를 자동 수집합니다.
+            지정된 폴더 및 하위 폴더에서 팀별 일지(`260803 그리드팀 업무 공유.xlsx` 등)를 자동 수집하고 분석합니다.
           </p>
         </div>
 
@@ -189,7 +138,7 @@ export const FileUploadView: React.FC<FileUploadViewProps> = ({
               onClick={onLoadSampleData}
               className="flex items-center space-x-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 transition cursor-pointer"
             >
-              <span>📊 샘플 3개팀 일지 채우기 (동기화 테스트)</span>
+              <span>📊 샘플 3개팀 일지 채우기</span>
             </button>
           )}
 

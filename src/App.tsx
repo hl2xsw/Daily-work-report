@@ -8,13 +8,8 @@ import { FileUploadView } from './components/FileUploadView';
 import { AutoUpdateTimer } from './components/AutoUpdateTimer';
 import {
   performFolderScan,
-  saveDirectoryHandle,
-  scanDirectoryHandleRecursively,
-  parseFileList,
 } from './utils/folderScanner';
 import { CheckCircle2 } from 'lucide-react';
-import { buildApiUrl } from './utils/apiConfig';
-import { ServerConfigModal } from './components/ServerConfigModal';
 
 const isValidReportItem = (r: any): r is WorkReportItem => {
   if (!r || typeof r !== 'object') return false;
@@ -70,14 +65,9 @@ export default function App() {
     return [];
   });
 
-  const [isServerConfigOpen, setIsServerConfigOpen] = useState<boolean>(false);
-  const [isStaticMode, setIsStaticMode] = useState<boolean>(false);
-
   // Refs for current state to avoid stale closures in interval / callbacks
   const reportsRef = useRef(reports);
   const historyRef = useRef(importedFilesHistory);
-  const lastSyncTimeRef = useRef(lastSyncTime);
-  const isPostingRef = useRef(false);
 
   useEffect(() => {
     reportsRef.current = reports;
@@ -86,261 +76,6 @@ export default function App() {
   useEffect(() => {
     historyRef.current = importedFilesHistory;
   }, [importedFilesHistory]);
-
-  useEffect(() => {
-    lastSyncTimeRef.current = lastSyncTime;
-  }, [lastSyncTime]);
-
-  // Sync to server API with retry support & 404 fallback
-  const pushReportsToServer = useCallback(
-    async (
-      updatedReports: WorkReportItem[],
-      updatedHistory: string[],
-      syncTime: string,
-      forceClear = false,
-      overwrite = true
-    ) => {
-      isPostingRef.current = true;
-      try {
-        const apiUrl = buildApiUrl(`/api/reports?_t=${Date.now()}`);
-        const res = await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            Pragma: 'no-cache',
-          },
-          body: JSON.stringify({
-            reports: updatedReports,
-            history: updatedHistory,
-            lastSyncTime: syncTime,
-            forceClear,
-            overwrite,
-          }),
-        });
-
-        if (res.ok) {
-          setIsStaticMode(false);
-          const data = await res.json();
-          if (data && Array.isArray(data.reports)) {
-            const clean = data.reports.filter(isValidReportItem);
-            reportsRef.current = clean;
-            setReports(clean);
-            if (Array.isArray(data.history)) {
-              const cleanHist = data.history.filter((h: any) => typeof h === 'string');
-              historyRef.current = cleanHist;
-              setImportedFilesHistory(cleanHist);
-            }
-            if (data.lastSyncTime !== undefined && data.lastSyncTime !== '-') {
-              setLastSyncTime(data.lastSyncTime);
-            }
-          }
-        } else if (res.status === 404) {
-          // GitHub Pages or static host mode
-          setIsStaticMode(true);
-          console.info('Static hosting detected (404 on API). Data preserved in local storage.');
-        } else {
-          console.warn('Failed to push reports to server, status:', res.status);
-        }
-      } catch (e) {
-        console.warn('Could not push reports to server, continuing in local mode:', e);
-      } finally {
-        isPostingRef.current = false;
-      }
-    },
-    []
-  );
-
-  // Fetch live reports from central server for smartphone/multi-device sync (with cache-busting)
-  const fetchServerReports = useCallback(
-    async (isManualTrigger = false) => {
-      if (isPostingRef.current) return;
-      try {
-        const cacheBuster = `_t=${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-        const apiUrl = buildApiUrl(`/api/reports?${cacheBuster}`);
-        const res = await fetch(apiUrl, {
-          cache: 'no-store',
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            Pragma: 'no-cache',
-          },
-        });
-
-        const d = new Date();
-        const nowStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
-
-        if (res.ok) {
-          setIsStaticMode(false);
-          const data = await res.json();
-          if (data && Array.isArray(data.reports)) {
-            const cleanServerReports = data.reports.filter(isValidReportItem);
-            const cleanHistory = Array.isArray(data.history)
-              ? data.history.filter((h: any) => typeof h === 'string')
-              : [];
-
-            reportsRef.current = cleanServerReports;
-            setReports(cleanServerReports);
-            historyRef.current = cleanHistory;
-            setImportedFilesHistory(cleanHistory);
-            
-            // Set current real-time fetch time
-            setLastSyncTime(nowStr);
-            localStorage.setItem('last_sync_time', nowStr);
-
-            if (cleanServerReports.length > 0) {
-              if (isManualTrigger) {
-                showToast(`✅ 서버에서 최신 업무보고 ${cleanServerReports.length}건을 성공적으로 동기화했습니다.`);
-              }
-              return cleanServerReports;
-            } else {
-              if (isManualTrigger) {
-                showToast('ℹ️ 서버에 등록된 업무보고 데이터가 없습니다. (PC에서 엑셀 파일을 업로드해 주세요)');
-              }
-              return [];
-            }
-          }
-        } else if (res.status === 404) {
-          // GitHub Pages or static host mode (No Node.js backend)
-          setIsStaticMode(true);
-          setLastSyncTime(nowStr);
-          localStorage.setItem('last_sync_time', nowStr);
-          if (isManualTrigger) {
-            showToast(`📱 로컬 저장소 동기화 완료 (${reportsRef.current.length}건). 중앙 서버 연결은 [🌐 서버 연동 설정]에서 가능합니다.`);
-          }
-          return reportsRef.current;
-        } else {
-          console.warn('Server API status:', res.status);
-          if (isManualTrigger) {
-            showToast(`⚠️ 서버 응답 코드: ${res.status}. 로컬 데이터를 유지합니다.`);
-          }
-        }
-      } catch (err) {
-        console.warn('Could not fetch from server API:', err);
-        if (isManualTrigger) {
-          showToast('📱 로컬 오프라인 모드로 최신 데이터를 유지하고 있습니다.');
-        }
-      }
-    },
-    []
-  );
-
-  // Sync on initial mount: Load server reports with automatic retry fallback
-  useEffect(() => {
-    let mounted = true;
-    let retryTimeout: any = null;
-
-    const initDataWithRetry = async (attempt = 1) => {
-      try {
-        const cacheBuster = `_t=${Date.now()}_init${attempt}`;
-        const apiUrl = buildApiUrl(`/api/reports?${cacheBuster}`);
-        const res = await fetch(apiUrl, {
-          cache: 'no-store',
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            Pragma: 'no-cache',
-          },
-        });
-
-        if (res.ok) {
-          setIsStaticMode(false);
-          const data = await res.json();
-          if (data && Array.isArray(data.reports)) {
-            const cleanReports = data.reports.filter(isValidReportItem);
-            const cleanHist = Array.isArray(data.history)
-              ? data.history.filter((h: any) => typeof h === 'string')
-              : [];
-            const syncTime = data.lastSyncTime || '-';
-
-            if (mounted) {
-              reportsRef.current = cleanReports;
-              setReports(cleanReports);
-              historyRef.current = cleanHist;
-              setImportedFilesHistory(cleanHist);
-              if (syncTime !== '-') setLastSyncTime(syncTime);
-            }
-            return;
-          }
-        } else if (res.status === 404) {
-          if (mounted) setIsStaticMode(true);
-          return;
-        }
-      } catch (e) {
-        console.info(`Init server data check (attempt ${attempt}):`, e);
-      }
-
-      // If nothing loaded and attempts left, retry in 1.5s
-      if (attempt < 2 && mounted) {
-        retryTimeout = setTimeout(() => {
-          if (mounted) initDataWithRetry(attempt + 1);
-        }, 1500);
-      }
-    };
-
-    initDataWithRetry(1);
-
-    return () => {
-      mounted = false;
-      if (retryTimeout) clearTimeout(retryTimeout);
-    };
-  }, []);
-
-  // Prevent mobile device from staying in upload tab
-  useEffect(() => {
-    const isMobileDevice = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
-    if (isMobileDevice && activeTab === 'upload') {
-      setActiveTab('dashboard');
-    }
-  }, [activeTab]);
-
-  // Periodic lightweight background sync check (Every 4 seconds) to guarantee real-time updates across PC & Smartphone
-  useEffect(() => {
-    const checkServerStatus = async () => {
-      if (isPostingRef.current) return;
-      try {
-        const cacheBuster = `_t=${Date.now()}`;
-        const res = await fetch(`/api/reports/status?${cacheBuster}`, {
-          cache: 'no-store',
-          headers: { 'Cache-Control': 'no-cache, no-store', Pragma: 'no-cache' },
-        });
-        if (res.ok) {
-          const status = await res.json();
-          const currentCount = reportsRef.current.length;
-          const currentSync = lastSyncTimeRef.current;
-
-          // If server count or lastSyncTime changed compared to client state, do full fetch
-          if (
-            (status.count !== undefined && status.count !== currentCount) ||
-            (status.lastSyncTime && status.lastSyncTime !== '-' && status.lastSyncTime !== currentSync)
-          ) {
-            fetchServerReports();
-          }
-        }
-      } catch (e) {
-        // Silent catch for background ping
-      }
-    };
-
-    const interval = setInterval(checkServerStatus, 4000);
-    return () => clearInterval(interval);
-  }, [fetchServerReports]);
-
-  // Sync immediately on tab focus or visibility change (When smartphone user opens or returns to web page)
-  useEffect(() => {
-    const handleVisibilityOrFocus = () => {
-      if (document.visibilityState === 'visible') {
-        fetchServerReports();
-      }
-    };
-
-    window.addEventListener('visibilitychange', handleVisibilityOrFocus);
-    window.addEventListener('focus', handleVisibilityOrFocus);
-    window.addEventListener('online', handleVisibilityOrFocus);
-    return () => {
-      window.removeEventListener('visibilitychange', handleVisibilityOrFocus);
-      window.removeEventListener('focus', handleVisibilityOrFocus);
-      window.removeEventListener('online', handleVisibilityOrFocus);
-    };
-  }, [fetchServerReports]);
 
   // Save to localStorage whenever data changes
   useEffect(() => {
@@ -435,9 +170,6 @@ export default function App() {
     const nowStr = new Date().toLocaleTimeString('ko-KR');
     setLastSyncTime(nowStr);
 
-    // Push to server so smartphones see it instantly
-    pushReportsToServer(finalReports, finalHistory, nowStr, false, true);
-
     if (filteredReports.length > 0) {
       showToast(`✅ ${candidateFileNames.length}개 파일 중 ${newFileNames.length}개 신규 파일 (${filteredReports.length}건 업무일지) 수집 완료!`);
     } else {
@@ -448,26 +180,32 @@ export default function App() {
       addedReportsCount: filteredReports.length,
       newFilesCount: newFileNames.length,
     };
-  }, [pushReportsToServer]);
+  }, []);
 
-  // Manual & Auto Update Action: Strictly fetches live data from server for PC & Smartphone
+  // Manual & Auto Update Action: Scans local folder handle if available, or refreshes local state
   const handleTriggerUpdate = React.useCallback(async () => {
     setIsUpdating(true);
     try {
-      // Fetch latest server reports directly from backend API
-      await fetchServerReports(true);
+      const scanResult = await performFolderScan();
+      if (scanResult && scanResult.fileNames.length > 0) {
+        handleImportReports(scanResult.reports, scanResult.fileNames);
+      } else {
+        const nowStr = new Date().toLocaleTimeString('ko-KR');
+        setLastSyncTime(nowStr);
+        showToast(`🔄 최신 데이터가 정상 갱신되었습니다. (총 ${reportsRef.current.length}건)`);
+      }
     } catch (err: any) {
       console.error('Update action failed:', err);
-      showToast(`⚠️ 서버 데이터 동기화 중 오류가 발생했습니다.`);
+      showToast(`⚠️ 데이터 갱신 중 오류가 발생했습니다: ${err.message || '다시 시도해 주세요.'}`);
     } finally {
       const nowStr = new Date().toLocaleTimeString('ko-KR');
       setLastSyncTime(nowStr);
       setIsUpdating(false);
     }
-  }, [fetchServerReports]);
+  }, [handleImportReports]);
 
-  // Load sample 3 teams data for easy testing and instant smartphone sync
-  const handleLoadSampleData = async () => {
+  // Load sample 3 teams data for quick demonstration
+  const handleLoadSampleData = () => {
     const today = new Date();
     const yyyy = today.getFullYear();
     const mm = String(today.getMonth() + 1).padStart(2, '0');
@@ -520,9 +258,9 @@ export default function App() {
         department: 'EV Innovation 부문',
         team: '개발팀',
         author: '박개발',
-        todayTask: '실시간 관제 대시보드 웹 소켓 API 서버 v2.4 릴리즈 및 배포',
+        todayTask: '실시간 업무보고 분석 대시보드 v2.6 릴리즈 및 UI 컴포넌트 배포',
         taskResult: '배포 완료 및 모니터링 중',
-        tomorrowTask: '스마트폰 반응형 UI 렌더링 성능 튜닝',
+        tomorrowTask: '부문별 일일 업무 보고서 엑셀 내보내기 템플릿 정교화',
         status: '완료',
         issues: '없음',
         remarks: '금일 연차',
@@ -541,7 +279,7 @@ export default function App() {
         author: '최코딩',
         todayTask: '엑셀 자동 파싱 모듈 컬럼 매핑 유연성 강화 (A~F열 자동 인식)',
         taskResult: '개발 완료 및 단위 테스트 통과',
-        tomorrowTask: '서버 데이터 동기화 안정화 및 캐시 무효화 적용',
+        tomorrowTask: '로컬 폴더 감시 파일 변경 감지 로직 최적화',
         status: '완료',
         issues: '없음',
         remarks: '정상',
@@ -582,12 +320,11 @@ export default function App() {
     const nowStr = new Date().toLocaleTimeString('ko-KR');
     setLastSyncTime(nowStr);
 
-    await pushReportsToServer(sampleItems, sampleFiles, nowStr, false, true);
-    showToast('🚀 샘플 3개팀 업무일지 5건이 스마트폰 표시용 경량 데이터로 서버에 성공적으로 연동 저장되었습니다!');
+    showToast('🚀 샘플 3개팀 업무일지 5건이 생성되었습니다!');
   };
 
   // Clear all data manually if user wants a clean slate
-  const handleClearAllData = async () => {
+  const handleClearAllData = () => {
     if (window.confirm('정말로 수집된 모든 업무일지 데이터와 이력을 초기화하시겠습니까?')) {
       setReports([]);
       setImportedFilesHistory([]);
@@ -596,12 +333,6 @@ export default function App() {
       localStorage.setItem('last_sync_time', '-');
       setSelectedDate('');
       setLastSyncTime('-');
-      try {
-        await pushReportsToServer([], [], '-', true);
-        await fetch('/api/reports', { method: 'DELETE' });
-      } catch (e) {
-        console.error('Failed to clear server reports:', e);
-      }
       showToast('🧹 모든 업무일지 데이터와 수집 이력이 초기화되었습니다.');
     }
   };
@@ -621,18 +352,6 @@ export default function App() {
         autoSyncTime={autoSyncTime}
         setAutoSyncTime={setAutoSyncTime}
         nextSyncTimeStr={nextSyncTimeStr}
-        onOpenServerConfig={() => setIsServerConfigOpen(true)}
-        isStaticMode={isStaticMode}
-      />
-
-      {/* Server Config & Real-time Sync Modal */}
-      <ServerConfigModal
-        isOpen={isServerConfigOpen}
-        onClose={() => setIsServerConfigOpen(false)}
-        onServerUrlChanged={() => {
-          fetchServerReports(true);
-        }}
-        isStaticMode={isStaticMode}
       />
 
       {/* Main Body Area */}
@@ -659,8 +378,6 @@ export default function App() {
             onTriggerUpdate={handleTriggerUpdate}
             onClearAllData={handleClearAllData}
             onLoadSampleData={handleLoadSampleData}
-            onOpenServerConfig={() => setIsServerConfigOpen(true)}
-            isStaticMode={isStaticMode}
             isUpdating={isUpdating}
             importedFilesHistory={importedFilesHistory}
           />
@@ -685,7 +402,7 @@ export default function App() {
 
       {/* Footer */}
       <footer className="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-500">
-        <p>팀별 일일 업무 보고 통합 관리 시스템 • 규격 호환 • 매일 {autoSyncTime} 자동 동기화</p>
+        <p>팀별 일일 업무 보고 통합 관리 시스템 • 규격 호환 • 매일 {autoSyncTime} 자동 갱신</p>
       </footer>
     </div>
   );
