@@ -24,6 +24,8 @@ interface FileUploadViewProps {
   onTriggerUpdate: () => void;
   onClearAllData?: () => void;
   onLoadSampleData?: () => void;
+  onOpenServerConfig?: () => void;
+  isStaticMode?: boolean;
   isUpdating: boolean;
   importedFilesHistory: string[];
 }
@@ -33,6 +35,8 @@ export const FileUploadView: React.FC<FileUploadViewProps> = ({
   onTriggerUpdate,
   onClearAllData,
   onLoadSampleData,
+  onOpenServerConfig,
+  isStaticMode = false,
   isUpdating,
   importedFilesHistory,
 }) => {
@@ -145,15 +149,23 @@ export const FileUploadView: React.FC<FileUploadViewProps> = ({
           </div>
 
           <div className="flex sm:flex-col items-center gap-2 w-full md:w-auto">
+            {onOpenServerConfig && (
+              <button
+                onClick={onOpenServerConfig}
+                className="w-full sm:w-auto flex items-center justify-center space-x-1.5 px-3.5 py-2 text-xs font-bold rounded-xl text-indigo-100 bg-indigo-900/80 hover:bg-indigo-800 border border-indigo-700/80 shadow-xs transition cursor-pointer whitespace-nowrap"
+              >
+                <span>🌐 서버 연동 설정</span>
+              </button>
+            )}
             <button
               onClick={onTriggerUpdate}
               disabled={isUpdating}
-              className={`w-full sm:w-auto flex items-center justify-center space-x-2 px-4 py-2.5 text-xs font-bold rounded-xl text-white shadow-md transition-all transform active:scale-95 whitespace-nowrap ${
+              className={`w-full sm:w-auto flex items-center justify-center space-x-2 px-4 py-2.5 text-xs font-bold rounded-xl text-white shadow-md transition-all transform active:scale-95 whitespace-nowrap cursor-pointer ${
                 isUpdating ? 'bg-indigo-800' : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-500/20'
               }`}
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isUpdating ? 'animate-spin' : ''}`} />
-              <span>{isUpdating ? '서버 동기화 중...' : '🔄 서버 최신 동기화'}</span>
+              <span>{isUpdating ? '서버 동기화 중...' : '🔄 최신 동기화'}</span>
             </button>
           </div>
         </div>

@@ -13,6 +13,8 @@ import {
   parseFileList,
 } from './utils/folderScanner';
 import { CheckCircle2 } from 'lucide-react';
+import { buildApiUrl } from './utils/apiConfig';
+import { ServerConfigModal } from './components/ServerConfigModal';
 
 const isValidReportItem = (r: any): r is WorkReportItem => {
   if (!r || typeof r !== 'object') return false;
@@ -68,6 +70,9 @@ export default function App() {
     return [];
   });
 
+  const [isServerConfigOpen, setIsServerConfigOpen] = useState<boolean>(false);
+  const [isStaticMode, setIsStaticMode] = useState<boolean>(false);
+
   // Refs for current state to avoid stale closures in interval / callbacks
   const reportsRef = useRef(reports);
   const historyRef = useRef(importedFilesHistory);
@@ -86,7 +91,7 @@ export default function App() {
     lastSyncTimeRef.current = lastSyncTime;
   }, [lastSyncTime]);
 
-  // Sync to server API with retry support
+  // Sync to server API with retry support & 404 fallback
   const pushReportsToServer = useCallback(
     async (
       updatedReports: WorkReportItem[],
@@ -97,7 +102,8 @@ export default function App() {
     ) => {
       isPostingRef.current = true;
       try {
-        const res = await fetch(`/api/reports?_t=${Date.now()}`, {
+        const apiUrl = buildApiUrl(`/api/reports?_t=${Date.now()}`);
+        const res = await fetch(apiUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -112,7 +118,9 @@ export default function App() {
             overwrite,
           }),
         });
+
         if (res.ok) {
+          setIsStaticMode(false);
           const data = await res.json();
           if (data && Array.isArray(data.reports)) {
             const clean = data.reports.filter(isValidReportItem);
@@ -127,11 +135,15 @@ export default function App() {
               setLastSyncTime(data.lastSyncTime);
             }
           }
+        } else if (res.status === 404) {
+          // GitHub Pages or static host mode
+          setIsStaticMode(true);
+          console.info('Static hosting detected (404 on API). Data preserved in local storage.');
         } else {
-          console.error('Failed to push reports to server, status:', res.status);
+          console.warn('Failed to push reports to server, status:', res.status);
         }
       } catch (e) {
-        console.error('Failed to push reports to server:', e);
+        console.warn('Could not push reports to server, continuing in local mode:', e);
       } finally {
         isPostingRef.current = false;
       }
@@ -145,7 +157,8 @@ export default function App() {
       if (isPostingRef.current) return;
       try {
         const cacheBuster = `_t=${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-        const res = await fetch(`/api/reports?${cacheBuster}`, {
+        const apiUrl = buildApiUrl(`/api/reports?${cacheBuster}`);
+        const res = await fetch(apiUrl, {
           cache: 'no-store',
           headers: {
             'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -157,6 +170,7 @@ export default function App() {
         const nowStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
 
         if (res.ok) {
+          setIsStaticMode(false);
           const data = await res.json();
           if (data && Array.isArray(data.reports)) {
             const cleanServerReports = data.reports.filter(isValidReportItem);
@@ -175,7 +189,7 @@ export default function App() {
 
             if (cleanServerReports.length > 0) {
               if (isManualTrigger) {
-                showToast(`✅ 서버에서 최신 업무보고 ${cleanServerReports.length}건을 성공적으로 불러왔습니다.`);
+                showToast(`✅ 서버에서 최신 업무보고 ${cleanServerReports.length}건을 성공적으로 동기화했습니다.`);
               }
               return cleanServerReports;
             } else {
@@ -185,16 +199,25 @@ export default function App() {
               return [];
             }
           }
-        } else {
-          console.warn('Server API error status:', res.status);
+        } else if (res.status === 404) {
+          // GitHub Pages or static host mode (No Node.js backend)
+          setIsStaticMode(true);
+          setLastSyncTime(nowStr);
+          localStorage.setItem('last_sync_time', nowStr);
           if (isManualTrigger) {
-            showToast(`⚠️ 서버 통신 실패 (상태코드: ${res.status}). 다시 시도해주세요.`);
+            showToast(`📱 로컬 저장소 동기화 완료 (${reportsRef.current.length}건). 중앙 서버 연결은 [🌐 서버 연동 설정]에서 가능합니다.`);
+          }
+          return reportsRef.current;
+        } else {
+          console.warn('Server API status:', res.status);
+          if (isManualTrigger) {
+            showToast(`⚠️ 서버 응답 코드: ${res.status}. 로컬 데이터를 유지합니다.`);
           }
         }
       } catch (err) {
         console.warn('Could not fetch from server API:', err);
         if (isManualTrigger) {
-          showToast('⚠️ 서버 연결 중 오류가 발생했습니다. 네트워크 상태를 확인해주세요.');
+          showToast('📱 로컬 오프라인 모드로 최신 데이터를 유지하고 있습니다.');
         }
       }
     },
@@ -209,7 +232,8 @@ export default function App() {
     const initDataWithRetry = async (attempt = 1) => {
       try {
         const cacheBuster = `_t=${Date.now()}_init${attempt}`;
-        const res = await fetch(`/api/reports?${cacheBuster}`, {
+        const apiUrl = buildApiUrl(`/api/reports?${cacheBuster}`);
+        const res = await fetch(apiUrl, {
           cache: 'no-store',
           headers: {
             'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -218,6 +242,7 @@ export default function App() {
         });
 
         if (res.ok) {
+          setIsStaticMode(false);
           const data = await res.json();
           if (data && Array.isArray(data.reports)) {
             const cleanReports = data.reports.filter(isValidReportItem);
@@ -235,13 +260,16 @@ export default function App() {
             }
             return;
           }
+        } else if (res.status === 404) {
+          if (mounted) setIsStaticMode(true);
+          return;
         }
       } catch (e) {
-        console.warn(`Init data fetch attempt ${attempt} failed:`, e);
+        console.info(`Init server data check (attempt ${attempt}):`, e);
       }
 
       // If nothing loaded and attempts left, retry in 1.5s
-      if (attempt < 3 && mounted) {
+      if (attempt < 2 && mounted) {
         retryTimeout = setTimeout(() => {
           if (mounted) initDataWithRetry(attempt + 1);
         }, 1500);
@@ -593,6 +621,18 @@ export default function App() {
         autoSyncTime={autoSyncTime}
         setAutoSyncTime={setAutoSyncTime}
         nextSyncTimeStr={nextSyncTimeStr}
+        onOpenServerConfig={() => setIsServerConfigOpen(true)}
+        isStaticMode={isStaticMode}
+      />
+
+      {/* Server Config & Real-time Sync Modal */}
+      <ServerConfigModal
+        isOpen={isServerConfigOpen}
+        onClose={() => setIsServerConfigOpen(false)}
+        onServerUrlChanged={() => {
+          fetchServerReports(true);
+        }}
+        isStaticMode={isStaticMode}
       />
 
       {/* Main Body Area */}
@@ -619,6 +659,8 @@ export default function App() {
             onTriggerUpdate={handleTriggerUpdate}
             onClearAllData={handleClearAllData}
             onLoadSampleData={handleLoadSampleData}
+            onOpenServerConfig={() => setIsServerConfigOpen(true)}
+            isStaticMode={isStaticMode}
             isUpdating={isUpdating}
             importedFilesHistory={importedFilesHistory}
           />

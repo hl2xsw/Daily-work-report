@@ -29,6 +29,8 @@ interface HeaderNavbarProps {
   autoSyncTime: string;
   setAutoSyncTime: (val: string) => void;
   nextSyncTimeStr: string;
+  onOpenServerConfig?: () => void;
+  isStaticMode?: boolean;
 }
 
 export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
@@ -43,6 +45,8 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
   autoSyncTime,
   setAutoSyncTime,
   nextSyncTimeStr,
+  onOpenServerConfig,
+  isStaticMode = false,
 }) => {
   const [currentTime, setCurrentTime] = useState<string>('');
   const [isTimePickerOpen, setIsTimePickerOpen] = useState<boolean>(false);
@@ -304,15 +308,31 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
 
         {/* Action Buttons */}
         <div className="flex items-center space-x-2.5 self-end md:self-auto">
+          {/* Server Config Button */}
+          {onOpenServerConfig && (
+            <button
+              onClick={onOpenServerConfig}
+              title="서버 연동 상태 확인 및 Cloud Run 백엔드 연결 설정"
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer ${
+                isStaticMode
+                  ? 'bg-amber-950/70 border-amber-700/80 text-amber-300 hover:bg-amber-900/80'
+                  : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
+              }`}
+            >
+              <Settings className="w-3.5 h-3.5 text-blue-400" />
+              <span>{isStaticMode ? '🌐 로컬/서버 설정' : '🌐 서버 연동 설정'}</span>
+            </button>
+          )}
+
           {/* Server Sync / Fetch Button */}
           <button
             onClick={onManualUpdate}
             disabled={isUpdating}
             title="스마트폰 및 PC 어디서나 서버에 저장된 최신 업무보고 데이터를 즉시 불러옵니다."
-            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:bg-emerald-800/80 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-950/30 transition-all cursor-pointer group"
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:bg-emerald-800/80 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-950/30 transition-all cursor-pointer group"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isUpdating ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
-            <span>{isUpdating ? '서버 통신 중...' : `🔄 서버 최신 일지 불러오기 (${totalReportCount}건)`}</span>
+            <span>{isUpdating ? '동기화 중...' : `🔄 최신 일지 동기화 (${totalReportCount}건)`}</span>
           </button>
         </div>
       </div>
