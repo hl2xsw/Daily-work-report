@@ -19,16 +19,49 @@ interface ReportTableViewProps {
 }
 
 export const ReportTableView: React.FC<ReportTableViewProps> = ({ reports }) => {
+  // Current Year-Month (e.g. 2026-09)
+  const currentMonth = useMemo(() => {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    return `${yyyy}-${mm}`;
+  }, []);
+
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => {
+    return currentMonth;
+  });
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [selectedTeam, setSelectedTeam] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [onlyVacation, setOnlyVacation] = useState<boolean>(false);
 
-  // Available unique dates
+  // Available unique months
+  const availableMonths = useMemo(() => {
+    const monthsSet = new Set<string>();
+    monthsSet.add(currentMonth);
+    reports.forEach((r) => {
+      if (r.date && r.date.length >= 7) {
+        monthsSet.add(r.date.substring(0, 7));
+      }
+    });
+    return Array.from(monthsSet).sort().reverse();
+  }, [reports, currentMonth]);
+
+  // Available unique dates (filtered by selectedMonth if not 'all')
   const availableDates = useMemo(() => {
-    const dates = Array.from(new Set(reports.map((r) => r.date))).sort().reverse();
+    const dates = Array.from(
+      new Set(
+        reports
+          .map((r) => r.date)
+          .filter((d) => {
+            if (!d) return false;
+            if (selectedMonth === 'all') return true;
+            return d.startsWith(selectedMonth);
+          })
+      )
+    ).sort().reverse();
     return dates;
-  }, [reports]);
+  }, [reports, selectedMonth]);
 
   // Unique teams
   const availableTeams = useMemo(() => {
@@ -38,13 +71,14 @@ export const ReportTableView: React.FC<ReportTableViewProps> = ({ reports }) => 
   // Filter logic
   const filteredReports = useMemo(() => {
     return reports.filter((r) => {
+      if (selectedMonth !== 'all' && !r.date.startsWith(selectedMonth)) return false;
       if (selectedDate && r.date !== selectedDate) return false;
       if (selectedTeam !== 'all' && r.team !== selectedTeam) return false;
       if (selectedStatus !== 'all' && r.status !== selectedStatus) return false;
       if (onlyVacation && !r.isVacationToday && !r.isVacationTomorrow) return false;
       return true;
     });
-  }, [reports, selectedDate, selectedTeam, selectedStatus, onlyVacation]);
+  }, [reports, selectedMonth, selectedDate, selectedTeam, selectedStatus, onlyVacation]);
 
   // Group by Date for clear structure
   const groupedByDate = useMemo(() => {
@@ -63,7 +97,12 @@ export const ReportTableView: React.FC<ReportTableViewProps> = ({ reports }) => 
       alert('다운로드할 업무 보고 데이터가 없습니다.');
       return;
     }
-    const label = selectedDate ? `${selectedDate}_업무보고` : '지정날짜_통합업무보고';
+    let label = '통합업무보고';
+    if (selectedDate) {
+      label = `${selectedDate}_업무보고`;
+    } else if (selectedMonth !== 'all') {
+      label = `${selectedMonth}_월간업무보고`;
+    }
     exportReportsToExcel(filteredReports, label);
   };
 
@@ -72,16 +111,48 @@ export const ReportTableView: React.FC<ReportTableViewProps> = ({ reports }) => 
       {/* Top Filter & Download Bar (Requirement 9) */}
       <div className="bg-white rounded-xl shadow-xs border border-slate-200/80 p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-3">
-          {/* Date Selector */}
+          {/* Month Selector (당월 기본 선택) */}
           <div className="flex items-center space-x-2">
             <Calendar className="w-4 h-4 text-blue-600" />
+            <span className="text-xs font-bold text-slate-700">월 지정:</span>
+            <select
+              value={selectedMonth}
+              onChange={(e) => {
+                const newMonth = e.target.value;
+                setSelectedMonth(newMonth);
+                if (selectedDate && newMonth !== 'all' && !selectedDate.startsWith(newMonth)) {
+                  setSelectedDate('');
+                }
+              }}
+              className="bg-slate-50 border border-slate-300 text-slate-800 text-xs font-semibold rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
+            >
+              <option value="all">전체 월</option>
+              {availableMonths.map((m) => {
+                const isCurrent = m === currentMonth;
+                const parts = m.split('-');
+                const label = parts.length === 2 ? `${parts[0]}년 ${parts[1]}월` : m;
+                return (
+                  <option key={m} value={m}>
+                    {label} {isCurrent ? '(당월)' : ''}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+
+          {/* Date Selector */}
+          <div className="flex items-center space-x-2">
             <span className="text-xs font-bold text-slate-700">날짜 지정:</span>
             <select
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="bg-slate-50 border border-slate-300 text-slate-800 text-xs font-semibold rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none"
+              className="bg-slate-50 border border-slate-300 text-slate-800 text-xs font-semibold rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
             >
-              <option value="">전체 날짜 전체보기</option>
+              <option value="">
+                {selectedMonth === 'all'
+                  ? '전체 날짜 보기'
+                  : `${selectedMonth.split('-')[0]}년 ${selectedMonth.split('-')[1]}월 전체 일자`}
+              </option>
               {availableDates.map((d) => (
                 <option key={d} value={d}>
                   {d} (일지)
@@ -97,7 +168,7 @@ export const ReportTableView: React.FC<ReportTableViewProps> = ({ reports }) => 
             <select
               value={selectedTeam}
               onChange={(e) => setSelectedTeam(e.target.value)}
-              className="bg-slate-50 border border-slate-300 text-slate-800 text-xs font-semibold rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none"
+              className="bg-slate-50 border border-slate-300 text-slate-800 text-xs font-semibold rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
             >
               <option value="all">모든 팀</option>
               {availableTeams.map((t) => (
@@ -115,7 +186,7 @@ export const ReportTableView: React.FC<ReportTableViewProps> = ({ reports }) => 
             <select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
-              className="bg-slate-50 border border-slate-300 text-slate-800 text-xs font-semibold rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none"
+              className="bg-slate-50 border border-slate-300 text-slate-800 text-xs font-semibold rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
             >
               <option value="all">전체 상태</option>
               <option value="완료">완료</option>
@@ -130,7 +201,7 @@ export const ReportTableView: React.FC<ReportTableViewProps> = ({ reports }) => 
               type="checkbox"
               checked={onlyVacation}
               onChange={(e) => setOnlyVacation(e.target.checked)}
-              className="rounded text-purple-600 focus:ring-purple-500"
+              className="rounded text-purple-600 focus:ring-purple-500 cursor-pointer"
             />
             <span>휴가자만 표시</span>
           </label>
@@ -139,23 +210,30 @@ export const ReportTableView: React.FC<ReportTableViewProps> = ({ reports }) => 
         {/* Date Download Button (Requirement 9) */}
         <button
           onClick={handleDownloadDateRange}
-          className="flex items-center justify-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white text-xs font-bold rounded-lg shadow-xs transition-all"
+          className="flex items-center justify-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white text-xs font-bold rounded-lg shadow-xs transition-all cursor-pointer"
         >
           <Download className="w-4 h-4" />
-          <span>지정 날짜 업무보고 다운로드 (.xlsx)</span>
+          <span>지정 조건 업무보고 다운로드 (.xlsx)</span>
         </button>
       </div>
 
       {/* Summary count */}
-      <div className="flex items-center justify-between text-xs text-slate-500 px-1">
+      <div className="flex flex-wrap items-center justify-between text-xs text-slate-500 px-1 gap-2">
         <span>
           조회 조건 결과: <strong className="text-slate-900 font-bold">{filteredReports.length}건</strong>의 업무일지
         </span>
-        {selectedDate && (
-          <span className="text-emerald-700 font-semibold bg-emerald-50 px-2.5 py-0.5 rounded border border-emerald-200">
-            선택된 일자: {selectedDate}
-          </span>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {selectedMonth !== 'all' && (
+            <span className="text-blue-700 font-semibold bg-blue-50 px-2.5 py-0.5 rounded border border-blue-200">
+              선택된 월: {selectedMonth.split('-')[0]}년 {selectedMonth.split('-')[1]}월 {selectedMonth === currentMonth ? '(당월)' : ''}
+            </span>
+          )}
+          {selectedDate && (
+            <span className="text-emerald-700 font-semibold bg-emerald-50 px-2.5 py-0.5 rounded border border-emerald-200">
+              선택된 일자: {selectedDate}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Grouped Reports List */}
