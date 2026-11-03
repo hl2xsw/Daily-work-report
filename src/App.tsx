@@ -9,6 +9,7 @@ import { AutoUpdateTimer } from './components/AutoUpdateTimer';
 import {
   performFolderScan,
 } from './utils/folderScanner';
+import { cleanTeamName } from './utils/cleanTeamName';
 import { CheckCircle2 } from 'lucide-react';
 
 const isValidReportItem = (r: any): r is WorkReportItem => {
@@ -24,10 +25,13 @@ export default function App() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const clean = parsed.filter(isValidReportItem);
-          if (clean.length !== parsed.length) {
-            localStorage.setItem('work_reports_data', JSON.stringify(clean));
-          }
+          const clean = parsed
+            .filter(isValidReportItem)
+            .map((item) => ({
+              ...item,
+              team: cleanTeamName(item.team),
+            }));
+          localStorage.setItem('work_reports_data', JSON.stringify(clean));
           return clean;
         }
       }
@@ -119,23 +123,46 @@ export default function App() {
     }, 4500);
   };
 
-  // Import uploaded custom files with strict file & row deduplication
-  const handleImportReports = React.useCallback((newReports: WorkReportItem[], fileNames?: string[]) => {
+  // Import uploaded custom files with smart deduplication & in-place update for enriched data
+  const handleImportReports = React.useCallback((rawNewReports: WorkReportItem[], fileNames?: string[]) => {
     const currentReports = reportsRef.current;
     const currentHistory = historyRef.current;
 
-    const existingFileSet = new Set(currentHistory);
-    const existingIds = new Set(currentReports.map((r) => r.id));
-    const existingCompositeKeys = new Set(
-      currentReports.map((r) => `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim())
-    );
+    // Ensure all incoming reports have sanitized team names
+    const newReports = rawNewReports.map((r) => ({
+      ...r,
+      team: cleanTeamName(r.team),
+    }));
 
-    // Filter out reports that already exist by ID or composite key
-    const filteredReports = newReports.filter((r) => {
-      if (existingIds.has(r.id)) return false;
-      const key = `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim();
-      if (existingCompositeKeys.has(key)) return false;
-      return true;
+    const existingFileSet = new Set(currentHistory);
+
+    // Merge or update: if a report with same (date + author) has new enriched table/content, update it!
+    const updatedMap = new Map<string, WorkReportItem>();
+    currentReports.forEach((r) => {
+      const key = `${r.date}_${r.author}`.trim();
+      updatedMap.set(key, { ...r, team: cleanTeamName(r.team) });
+    });
+
+    let newCount = 0;
+    let enrichedCount = 0;
+
+    newReports.forEach((nr) => {
+      const key = `${nr.date}_${nr.author}`.trim();
+      if (updatedMap.has(key)) {
+        const existing = updatedMap.get(key)!;
+        // If the new report has a markdown table or longer taskResult, update it
+        if (
+          (nr.taskResult?.includes('|') && !existing.taskResult?.includes('|')) ||
+          (nr.taskResult && existing.taskResult && nr.taskResult.length > existing.taskResult.length) ||
+          existing.team.endsWith('서')
+        ) {
+          updatedMap.set(key, { ...existing, ...nr });
+          enrichedCount++;
+        }
+      } else {
+        updatedMap.set(key, nr);
+        newCount++;
+      }
     });
 
     const candidateFileNames = fileNames && fileNames.length > 0 
@@ -144,20 +171,9 @@ export default function App() {
 
     const newFileNames = candidateFileNames.filter((fn) => !existingFileSet.has(fn));
 
-    let finalReports = currentReports;
-    if (filteredReports.length > 0) {
-      const prevIds = new Set(currentReports.map((r) => r.id));
-      const prevKeys = new Set(currentReports.map((r) => `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim()));
-      const trulyNew = filteredReports.filter((r) => {
-        if (prevIds.has(r.id)) return false;
-        const key = `${r.date}_${r.team}_${r.author}_${r.todayTask}`.trim();
-        if (prevKeys.has(key)) return false;
-        return true;
-      });
-      finalReports = [...trulyNew, ...currentReports];
-      reportsRef.current = finalReports;
-      setReports(finalReports);
-    }
+    const finalReports = Array.from(updatedMap.values());
+    reportsRef.current = finalReports;
+    setReports(finalReports);
 
     let finalHistory = currentHistory;
     if (candidateFileNames.length > 0) {
@@ -170,14 +186,15 @@ export default function App() {
     const nowStr = new Date().toLocaleTimeString('ko-KR');
     setLastSyncTime(nowStr);
 
-    if (filteredReports.length > 0) {
-      showToast(`✅ ${candidateFileNames.length}개 파일 중 ${newFileNames.length}개 신규 파일 (${filteredReports.length}건 업무일지) 수집 완료!`);
+    const totalUpdated = newCount + enrichedCount;
+    if (totalUpdated > 0) {
+      showToast(`✅ ${candidateFileNames.length}개 파일 처리 완료 (신규 ${newCount}건, 표/내용 갱신 ${enrichedCount}건)`);
     } else {
       showToast(`ℹ️ 기존에 이미 읽어온 업무일지 파일입니다. (중복 데이터 제외)`);
     }
 
     return {
-      addedReportsCount: filteredReports.length,
+      addedReportsCount: totalUpdated,
       newFilesCount: newFileNames.length,
     };
   }, []);

@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { WorkReportItem, TeamStats } from '../types';
+import { cleanTeamName } from '../utils/cleanTeamName';
 import {
   BarChart,
   Bar,
@@ -80,7 +81,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     const stats: Record<string, TeamStats> = {};
 
     dateReports.forEach((item) => {
-      const team = item.team || '미지정팀';
+      const team = cleanTeamName(item.team);
       if (!stats[team]) {
         stats[team] = {
           team,

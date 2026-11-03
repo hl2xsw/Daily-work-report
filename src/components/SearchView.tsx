@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { WorkReportItem, FilterState } from '../types';
 import { exportReportsToExcel } from '../utils/excelParser';
+import { cleanTeamName } from '../utils/cleanTeamName';
+import { FormattedWorkContent } from './FormattedWorkContent';
 import {
   Search,
   Download,
@@ -31,7 +33,7 @@ export const SearchView: React.FC<SearchViewProps> = ({ reports }) => {
   });
 
   const availableTeams = useMemo(() => {
-    return Array.from(new Set(reports.map((r) => r.team)));
+    return Array.from(new Set(reports.map((r) => cleanTeamName(r.team)).filter(Boolean))).sort();
   }, [reports]);
 
   // Execute Search & Filters
@@ -44,7 +46,7 @@ export const SearchView: React.FC<SearchViewProps> = ({ reports }) => {
       if (filter.endDate && r.date > filter.endDate) return false;
 
       // Team Filter
-      if (filter.selectedTeam !== 'all' && r.team !== filter.selectedTeam) return false;
+      if (filter.selectedTeam !== 'all' && cleanTeamName(r.team) !== filter.selectedTeam) return false;
 
       // Status Filter
       if (filter.selectedStatus !== 'all' && r.status !== filter.selectedStatus) return false;
@@ -269,18 +271,25 @@ export const SearchView: React.FC<SearchViewProps> = ({ reports }) => {
                       {item.date}
                     </td>
                     <td className="py-3 px-2.5 font-bold text-emerald-700 whitespace-nowrap">
-                      {item.team}
+                      {cleanTeamName(item.team)}
                     </td>
                     <td className="py-3 px-2.5 font-semibold text-slate-800 whitespace-nowrap">{item.author}</td>
-                    <td className="py-3 px-2.5 leading-relaxed">{item.todayTask}</td>
-                    <td className="py-3 px-2.5 leading-relaxed bg-sky-50/20">
-                      <span className="block font-semibold text-sky-800 text-[10px] mb-0.5">상태: {item.status}</span>
-                      {item.taskResult || '-'}
+                    <td className="py-3 px-2.5 leading-relaxed">
+                      <FormattedWorkContent text={item.todayTask} />
                     </td>
-                    <td className="py-3 px-2.5 leading-relaxed bg-slate-50/50">{item.tomorrowTask}</td>
+                    <td className="py-3 px-2.5 leading-relaxed bg-sky-50/20">
+                      <span className="block font-semibold text-sky-800 text-[10px] mb-1">상태: {item.status}</span>
+                      <FormattedWorkContent text={item.taskResult} className="text-xs text-slate-700" />
+                    </td>
+                    <td className="py-3 px-2.5 leading-relaxed bg-slate-50/50">
+                      <FormattedWorkContent text={item.tomorrowTask} />
+                    </td>
                     <td className="py-3 px-2.5 text-[11px]">
                       {item.issues && item.issues !== '-' && item.issues !== '없음' && item.issues !== '특이사항 없음' ? (
-                        <span className="text-red-600 font-medium">⚠️ {item.issues}</span>
+                        <div className="text-red-600 font-medium">
+                          <span className="font-bold mr-1">⚠️</span>
+                          <FormattedWorkContent text={item.issues} />
+                        </div>
                       ) : (
                         <span className="text-slate-400">-</span>
                       )}

@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { WorkReportItem } from '../types';
 import { exportReportsToExcel } from '../utils/excelParser';
+import { cleanTeamName } from '../utils/cleanTeamName';
+import { FormattedWorkContent } from './FormattedWorkContent';
 import {
   Download,
   Calendar,
@@ -65,7 +67,7 @@ export const ReportTableView: React.FC<ReportTableViewProps> = ({ reports }) => 
 
   // Unique teams
   const availableTeams = useMemo(() => {
-    return Array.from(new Set(reports.map((r) => r.team)));
+    return Array.from(new Set(reports.map((r) => cleanTeamName(r.team)).filter(Boolean))).sort();
   }, [reports]);
 
   // Filter logic
@@ -73,7 +75,7 @@ export const ReportTableView: React.FC<ReportTableViewProps> = ({ reports }) => 
     return reports.filter((r) => {
       if (selectedMonth !== 'all' && !r.date.startsWith(selectedMonth)) return false;
       if (selectedDate && r.date !== selectedDate) return false;
-      if (selectedTeam !== 'all' && r.team !== selectedTeam) return false;
+      if (selectedTeam !== 'all' && cleanTeamName(r.team) !== selectedTeam) return false;
       if (selectedStatus !== 'all' && r.status !== selectedStatus) return false;
       if (onlyVacation && !r.isVacationToday && !r.isVacationTomorrow) return false;
       return true;
@@ -284,7 +286,7 @@ export const ReportTableView: React.FC<ReportTableViewProps> = ({ reports }) => 
                     <tr key={item.id} className="hover:bg-slate-50/80 transition">
                       {/* Team */}
                       <td className="py-3 px-2.5 font-bold text-emerald-700 whitespace-nowrap align-top">
-                        {item.team}
+                        {cleanTeamName(item.team)}
                       </td>
 
                       {/* Author */}
@@ -297,12 +299,12 @@ export const ReportTableView: React.FC<ReportTableViewProps> = ({ reports }) => 
 
                       {/* Today Task */}
                       <td className="py-3 px-2.5 text-slate-800 leading-relaxed font-normal align-top break-keep">
-                        <p className="whitespace-pre-line">{item.todayTask}</p>
+                        <FormattedWorkContent text={item.todayTask} />
                       </td>
 
                       {/* Task Result & Status */}
                       <td className="py-3 px-2.5 text-slate-800 leading-relaxed font-normal bg-sky-50/30 align-top break-keep">
-                        <div className="mb-1">
+                        <div className="mb-1.5">
                           {item.status === '완료' && (
                             <span className="inline-flex items-center space-x-1 px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded-full text-[10px]">
                               <CheckCircle2 className="w-3 h-3 text-emerald-600" />
@@ -322,19 +324,20 @@ export const ReportTableView: React.FC<ReportTableViewProps> = ({ reports }) => 
                             </span>
                           )}
                         </div>
-                        <p className="whitespace-pre-line text-xs font-medium text-slate-700">{item.taskResult || '-'}</p>
+                        <FormattedWorkContent text={item.taskResult} className="text-xs font-medium text-slate-700" />
                       </td>
 
                       {/* Tomorrow Task */}
                       <td className="py-3 px-2.5 text-slate-700 leading-relaxed font-normal bg-slate-50/50 align-top break-keep">
-                        <p className="whitespace-pre-line">{item.tomorrowTask}</p>
+                        <FormattedWorkContent text={item.tomorrowTask} />
                       </td>
 
                       {/* Issues */}
                       <td className="py-3 px-2.5 align-top break-keep">
                         {item.issues && item.issues !== '-' && item.issues !== '없음' && item.issues !== '특이사항 없음' ? (
-                          <div className="bg-red-50 text-red-700 border border-red-200 p-2 rounded-lg text-[11px] font-medium leading-tight whitespace-pre-line">
-                            ⚠️ {item.issues}
+                          <div className="bg-red-50 text-red-700 border border-red-200 p-2 rounded-lg text-[11px] font-medium leading-tight">
+                            <span className="font-bold mr-1">⚠️</span>
+                            <FormattedWorkContent text={item.issues} />
                           </div>
                         ) : (
                           <span className="text-slate-400 text-[11px]">-</span>

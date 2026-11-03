@@ -1,19 +1,27 @@
 import * as XLSX from 'xlsx';
 import { WorkReportItem, WorkStatus } from '../types';
+import { cleanTeamName } from './cleanTeamName';
 
-// Parse filename format like "260803 그리드팀 업무 공유.xlsx" or "20260803_그리드팀_업무일지.xlsx"
+// Parse filename format like "260803 그리드팀 업무 공유.xlsx" or "20261102_AIO TF 일일업무보고서.xlsx"
 export function parseFileNameMetadata(fileName: string): { date: string; displayDate: string; team: string } {
-  let dateStr = '2026-08-03';
-  let displayDateStr = '2026년 08월 03일';
-  let teamName = '그리드팀';
+  let dateStr = '2026-11-02';
+  let displayDateStr = '2026년 11월 02일';
+  let teamName = 'AIO TF';
 
   const cleanName = fileName.replace(/\.[^/.]+$/, ''); // remove extension
 
-  // Match YYMMDD (e.g., 260803) or YYYYMMDD (e.g. 20260803)
+  // Match YYMMDD (e.g., 261102) or YYYYMMDD (e.g. 20261102) or YYYY-MM-DD
+  const yyyymmddHyphen = cleanName.match(/(\d{4})-(\d{2})-(\d{2})/);
+  const yyyymmddMatch = cleanName.match(/(20\d{6})/);
   const yymmddMatch = cleanName.match(/(\d{6})/);
-  const yyyymmddMatch = cleanName.match(/(\d{8})/);
 
-  if (yyyymmddMatch) {
+  if (yyyymmddHyphen) {
+    const year = yyyymmddHyphen[1];
+    const month = yyyymmddHyphen[2];
+    const day = yyyymmddHyphen[3];
+    dateStr = `${year}-${month}-${day}`;
+    displayDateStr = `${year}년 ${month}월 ${day}일`;
+  } else if (yyyymmddMatch) {
     const raw = yyyymmddMatch[1];
     const year = raw.substring(0, 4);
     const month = raw.substring(4, 6);
@@ -29,22 +37,14 @@ export function parseFileNameMetadata(fileName: string): { date: string; display
     displayDateStr = `${year}년 ${month}월 ${day}일`;
   }
 
-  // Match team name
-  if (cleanName.includes('그리드팀') || cleanName.includes('그리드')) {
-    teamName = '그리드팀';
-  } else if (cleanName.includes('개발팀') || cleanName.includes('개발')) {
-    teamName = '개발팀';
-  } else if (cleanName.includes('운영팀') || cleanName.includes('운영')) {
-    teamName = '운영팀';
-  } else if (cleanName.includes('인프라팀') || cleanName.includes('인프라')) {
-    teamName = '인프라팀';
-  } else {
-    // Extract team from string e.g., "260803 XX팀 업무"
-    const words = cleanName.split(/[\s_]+/);
-    const foundTeam = words.find((w) => w.endsWith('팀'));
-    if (foundTeam) {
-      teamName = foundTeam;
-    }
+  // Extract team from cleanName
+  let extracted = cleanName;
+  // Remove date parts
+  extracted = extracted.replace(/\d{4}[-_.]?\d{2}[-_.]?\d{2}/g, '');
+  extracted = extracted.replace(/\d{6,8}/g, '');
+  const sanitizedTeam = cleanTeamName(extracted);
+  if (sanitizedTeam && sanitizedTeam !== '미지정팀') {
+    teamName = sanitizedTeam;
   }
 
   return { date: dateStr, displayDate: displayDateStr, team: teamName };
@@ -53,6 +53,29 @@ export function parseFileNameMetadata(fileName: string): { date: string; display
 // Returns empty array (No mock data by default)
 export function getInitialMockReports(): WorkReportItem[] {
   return [];
+}
+
+/**
+ * Check if a row represents a table header or sub-table row embedded inside the report
+ */
+function isSubTableHeader(cells: string[]): boolean {
+  const text = cells.join(' ').toLowerCase();
+  return (
+    (text.includes('no') || text.includes('번호') || text.includes('순번')) &&
+    (text.includes('모델') || text.includes('항목') || text.includes('ver') || text.includes('진행') || text.includes('상태') || text.includes('구분') || text.includes('기타'))
+  );
+}
+
+/**
+ * Format an array of cell values into a markdown table row: | cell1 | cell2 | ... |
+ */
+function formatMarkdownTableRow(cells: string[]): string {
+  // Clean newlines inside cells to <br/> so the table format stays intact
+  const safeCells = cells.map((c) => {
+    const trimmed = String(c || '').trim();
+    return trimmed.replace(/\r?\n/g, '<br/>').replace(/\|/g, '&#124;');
+  });
+  return `| ${safeCells.join(' | ')} |`;
 }
 
 // Read and parse uploaded Excel file using XLSX
@@ -71,29 +94,28 @@ export async function parseExcelFile(file: File): Promise<WorkReportItem[]> {
     return [];
   }
 
-  // 1. Extract team name from the 1st row (Row 0)
+  // 1. Extract team name from the 1st row (Row 0) or title banner
   let teamFromRow1 = '';
-  if (jsonRows.length > 0 && Array.isArray(jsonRows[0])) {
-    const row0Cells = jsonRows[0].map((cell: any) => String(cell || '').trim()).filter(Boolean);
-    const row0Combined = row0Cells.join(' ');
-    
-    // Look for explicit team pattern e.g., "EV Innovation 부문", "그리드팀", "팀명: OO팀"
-    const teamMatch = row0Combined.match(/(?:팀명|소속|팀|부서|부문)?\s*[:：]?\s*([가-힣a-zA-Z0-9_\- ]+(?:팀|부문|파트|센터|실|그룹))/i);
-    if (teamMatch && teamMatch[1] && teamMatch[1].length < 30) {
-      teamFromRow1 = teamMatch[1].trim();
-    } else if (row0Cells.length > 0) {
-      // If 1st row is short title like "EV Innovation 부문 업무일지" or "개발팀"
-      const cleaned0 = row0Cells[0].replace(/(?:업무일지|일일업무보고|업무공유|일지|보고서)/g, '').trim();
-      if (cleaned0.length > 1 && cleaned0.length < 25) {
-        teamFromRow1 = cleaned0;
+  for (let r = 0; r < Math.min(jsonRows.length, 3); r++) {
+    const row = jsonRows[r];
+    if (Array.isArray(row)) {
+      const row0Cells = row.map((cell: any) => String(cell || '').trim()).filter(Boolean);
+      const row0Combined = row0Cells.join(' ');
+      if (!row0Combined) continue;
+
+      // Extract and sanitize team name
+      const cleaned = cleanTeamName(row0Combined);
+      if (cleaned && cleaned !== '미지정팀' && cleaned.length >= 2 && cleaned.length <= 25) {
+        teamFromRow1 = cleaned;
+        break;
       }
     }
   }
 
-  const finalTeamName = teamFromRow1 || meta.team;
+  const finalTeamName = cleanTeamName(teamFromRow1 || meta.team);
 
   // 2. Find Header Row or Column Mapping
-  // User standard mapping requirement:
+  // User standard mapping:
   // A열(0) : 담당자
   // B열(1) : 금일 업무
   // C열(2) : 업무 결과
@@ -163,54 +185,132 @@ export async function parseExcelFile(file: File): Promise<WorkReportItem[]> {
   const startRow = headerIndex >= 0 ? headerIndex + 1 : 1;
   const parsedItems: WorkReportItem[] = [];
 
+  // Track the most recent report item to attach sub-tables or continuation rows
+  let currentReport: WorkReportItem | null = null;
+  let inSubTable = false;
+  let subTableColCount = 0;
+
   for (let i = startRow; i < jsonRows.length; i++) {
     const row = jsonRows[i];
     if (!row || !Array.isArray(row) || row.length === 0) continue;
 
-    let author = String(row[colMap['author']] || '').trim();
-    
-    // Ignore explicit header repetitions or total rows
+    let authorRaw = String(row[colMap['author']] || '').trim();
+
+    // Check if this row is an explicit header repetition or total/summary row
     if (
-      author === '담당자' ||
-      author === '성명' ||
-      author === '이름' ||
-      author === '작성자' ||
-      author.includes('합계') ||
-      author.includes('소계') ||
-      author.includes('TOTAL')
+      authorRaw === '담당자' ||
+      authorRaw === '성명' ||
+      authorRaw === '이름' ||
+      authorRaw === '작성자' ||
+      authorRaw.includes('합계') ||
+      authorRaw.includes('소계') ||
+      authorRaw.includes('TOTAL')
     ) {
       continue;
     }
 
-    const todayTask = String(row[colMap['todayTask']] || '').trim();
-    const taskResult = String(row[colMap['taskResult']] || '').trim();
-    const tomorrowTask = String(row[colMap['tomorrowTask']] || '').trim();
-    const issues = String(row[colMap['issues']] || '').trim();
-    const remarks = String(row[colMap['remarks']] || '').trim();
+    const todayTaskRaw = String(row[colMap['todayTask']] || '').trim();
+    const taskResultRaw = String(row[colMap['taskResult']] || '').trim();
+    const tomorrowTaskRaw = String(row[colMap['tomorrowTask']] || '').trim();
+    const issuesRaw = String(row[colMap['issues']] || '').trim();
+    const remarksRaw = String(row[colMap['remarks']] || '').trim();
 
-    // Skip if all task fields are empty
-    if (!todayTask && !tomorrowTask && !taskResult && !issues && !remarks) {
+    // Filter out completely blank rows
+    const nonBlankCells = row.map((c) => String(c || '').trim()).filter(Boolean);
+    if (nonBlankCells.length === 0) {
+      inSubTable = false;
       continue;
     }
 
-    // If author is empty or numeric (e.g. row number), attempt fallback to nearby columns or default
-    if (!author || /^\d+$/.test(author)) {
-      // Check column 0, 1, 2 for a candidate name (2-4 Korean chars or short name)
-      for (let c = 0; c < Math.min(row.length, 4); c++) {
-        const val = String(row[c] || '').trim();
-        if (val && val.length >= 2 && val.length <= 10 && !/^\d+$/.test(val) && !val.includes('업무') && !val.includes('진행')) {
-          author = val;
-          break;
+    // -------------------------------------------------------------
+    // SUB-TABLE DETECTION (Requirement 2: Embedded Tables in Work Result)
+    // -------------------------------------------------------------
+    // Find if this row is a sub-table header or table data row belonging to the previous person
+    const isNewAuthor =
+      authorRaw &&
+      !/^\d+$/.test(authorRaw) &&
+      !authorRaw.toLowerCase().includes('no') &&
+      !authorRaw.includes('모델') &&
+      !authorRaw.includes('jc-') &&
+      authorRaw.length <= 15;
+
+    // Check if this row is a sub-table header
+    const rowCellsString = row.map((c) => String(c || '').trim());
+    const startsSubTable = isSubTableHeader(rowCellsString);
+
+    if (currentReport && (!authorRaw || !isNewAuthor || startsSubTable || inSubTable)) {
+      if (startsSubTable) {
+        inSubTable = true;
+        // Extract table columns from row (starting from first non-empty cell)
+        const firstNonEmpty = rowCellsString.findIndex((c) => c !== '');
+        const tableHeaderCells = rowCellsString.slice(firstNonEmpty).filter((c, idx, arr) => {
+          // Keep cells up to last non-empty
+          return idx <= arr.map((x, i) => (x !== '' ? i : -1)).reduce((max, curr) => Math.max(max, curr), 0);
+        });
+
+        subTableColCount = tableHeaderCells.length;
+        const mdHeader = formatMarkdownTableRow(tableHeaderCells);
+        const mdSeparator = `| ${tableHeaderCells.map(() => '---').join(' | ')} |`;
+
+        // Append markdown table to previous report's taskResult
+        currentReport.taskResult = currentReport.taskResult && currentReport.taskResult !== '-'
+          ? `${currentReport.taskResult}\n\n${mdHeader}\n${mdSeparator}`
+          : `${mdHeader}\n${mdSeparator}`;
+
+        continue;
+      } else if (inSubTable) {
+        // Table data row
+        const firstNonEmpty = rowCellsString.findIndex((c) => c !== '');
+        if (firstNonEmpty >= 0) {
+          const firstVal = rowCellsString[firstNonEmpty];
+          // If first val is numeric (e.g. 1, 2, 3) or model name, it's definitely a table row
+          const isTableRow = /^\d+$/.test(firstVal) || firstVal.includes('JC-') || nonBlankCells.length >= 2;
+
+          if (isTableRow) {
+            // Slice cells matching table column count
+            const tableDataCells = rowCellsString.slice(firstNonEmpty, firstNonEmpty + subTableColCount);
+            // Pad if shorter
+            while (tableDataCells.length < subTableColCount) {
+              tableDataCells.push('-');
+            }
+
+            const mdRow = formatMarkdownTableRow(tableDataCells);
+            currentReport.taskResult = `${currentReport.taskResult}\n${mdRow}`;
+            continue;
+          } else {
+            inSubTable = false;
+          }
+        } else {
+          inSubTable = false;
+          continue;
         }
-      }
-      if (!author || /^\d+$/.test(author)) {
-        author = '담당자';
       }
     }
 
+    // If author is empty or looks like a table row / number, and no major tasks, skip or treat as sub-row
+    if (!authorRaw || /^\d+$/.test(authorRaw) || authorRaw.toLowerCase().startsWith('no')) {
+      if (currentReport && (taskResultRaw || todayTaskRaw || tomorrowTaskRaw)) {
+        // Append continuation text to previous report
+        if (taskResultRaw) currentReport.taskResult += `\n${taskResultRaw}`;
+        if (todayTaskRaw) currentReport.todayTask += `\n${todayTaskRaw}`;
+        if (tomorrowTaskRaw) currentReport.tomorrowTask += `\n${tomorrowTaskRaw}`;
+        if (issuesRaw) currentReport.issues += `\n${issuesRaw}`;
+        continue;
+      }
+      continue;
+    }
+
+    // Skip if all task fields are empty
+    if (!todayTaskRaw && !tomorrowTaskRaw && !taskResultRaw && !issuesRaw && !remarksRaw) {
+      continue;
+    }
+
+    inSubTable = false;
+    const author = authorRaw;
+
     // Work Status Determination
     let status: WorkStatus = '진행중';
-    const combinedStatusText = `${taskResult} ${remarks} ${todayTask}`.toLowerCase();
+    const combinedStatusText = `${taskResultRaw} ${remarksRaw} ${todayTaskRaw}`.toLowerCase();
 
     if (
       combinedStatusText.includes('완료') ||
@@ -237,21 +337,21 @@ export async function parseExcelFile(file: File): Promise<WorkReportItem[]> {
     }
 
     // Vacation Detection from B열, D열, F열 (금일, 익일, 비고)
-    const combinedVacationText = `${todayTask} ${tomorrowTask} ${remarks}`;
+    const combinedVacationText = `${todayTaskRaw} ${tomorrowTaskRaw} ${remarksRaw}`;
     const isVacationToday =
-      todayTask.includes('휴가') ||
-      todayTask.includes('연차') ||
-      todayTask.includes('반차') ||
-      remarks.includes('금일휴가') ||
-      remarks.includes('금일 연차') ||
-      remarks.includes('휴가');
+      todayTaskRaw.includes('휴가') ||
+      todayTaskRaw.includes('연차') ||
+      todayTaskRaw.includes('반차') ||
+      remarksRaw.includes('금일휴가') ||
+      remarksRaw.includes('금일 연차') ||
+      remarksRaw.includes('휴가');
 
     const isVacationTomorrow =
-      tomorrowTask.includes('휴가') ||
-      tomorrowTask.includes('연차') ||
-      tomorrowTask.includes('반차') ||
-      remarks.includes('익일휴가') ||
-      remarks.includes('익일 연차');
+      tomorrowTaskRaw.includes('휴가') ||
+      tomorrowTaskRaw.includes('연차') ||
+      tomorrowTaskRaw.includes('반차') ||
+      remarksRaw.includes('익일휴가') ||
+      remarksRaw.includes('익일 연차');
 
     let vacationTypeToday = undefined;
     if (isVacationToday) {
@@ -277,26 +377,29 @@ export async function parseExcelFile(file: File): Promise<WorkReportItem[]> {
     const cleanFile = (file.name || '').replace(/[^a-zA-Z0-9가-힣]/g, '');
     const deterministicId = `rep-${meta.date}-${finalTeamName}-${cleanAuthor}-${i}-${cleanFile}`;
 
-    parsedItems.push({
+    const newReportItem: WorkReportItem = {
       id: deterministicId,
       date: meta.date,
       displayDate: meta.displayDate,
       department: 'EV Innovation 부문',
       team: finalTeamName,
       author: author,
-      todayTask: todayTask || '-',
-      taskResult: taskResult || '-',
-      tomorrowTask: tomorrowTask || '-',
+      todayTask: todayTaskRaw || '-',
+      taskResult: taskResultRaw || '-',
+      tomorrowTask: tomorrowTaskRaw || '-',
       status: status,
-      issues: issues || '-',
-      remarks: remarks || '-',
+      issues: issuesRaw || '-',
+      remarks: remarksRaw || '-',
       isVacationToday: isVacationToday,
       vacationTypeToday: vacationTypeToday,
       isVacationTomorrow: isVacationTomorrow,
       vacationTypeTomorrow: vacationTypeTomorrow,
       sourceFileName: file.name,
       updatedAt: new Date().toISOString(),
-    });
+    };
+
+    parsedItems.push(newReportItem);
+    currentReport = newReportItem;
   }
 
   return parsedItems;
@@ -304,20 +407,28 @@ export async function parseExcelFile(file: File): Promise<WorkReportItem[]> {
 
 // Export work reports to Excel file
 export function exportReportsToExcel(reports: WorkReportItem[], fileNamePrefix: string = '통합_일일업무보고') {
-  const excelData = reports.map((item, index) => ({
-    'No': index + 1,
-    '날짜': item.date,
-    '부문': item.department,
-    '팀명': item.team,
-    '담당자': item.author,
-    '금일 업무': item.todayTask,
-    '익일 업무': item.tomorrowTask,
-    '업무 상태': item.status,
-    '이슈사항 및 조치계획': item.issues,
-    '금일 휴가 여부': item.isVacationToday ? `휴가 (${item.vacationTypeToday || '연차'})` : '정상근무',
-    '익일 휴가 여부': item.isVacationTomorrow ? `휴가 (${item.vacationTypeTomorrow || '연차'})` : '정상근무',
-    '출처 파일': item.sourceFileName || '-',
-  }));
+  const excelData = reports.map((item, index) => {
+    // When exporting, convert markdown table to readable text format
+    const cleanTaskResult = (item.taskResult || '-')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/\| --- (?:\| --- )*\|/g, '');
+
+    return {
+      'No': index + 1,
+      '날짜': item.date,
+      '부문': item.department,
+      '팀명': cleanTeamName(item.team),
+      '담당자': item.author,
+      '금일 업무': item.todayTask,
+      '업무 결과': cleanTaskResult,
+      '익일 업무': item.tomorrowTask,
+      '업무 상태': item.status,
+      '이슈사항 및 조치계획': item.issues,
+      '금일 휴가 여부': item.isVacationToday ? `휴가 (${item.vacationTypeToday || '연차'})` : '정상근무',
+      '익일 휴가 여부': item.isVacationTomorrow ? `휴가 (${item.vacationTypeTomorrow || '연차'})` : '정상근무',
+      '출처 파일': item.sourceFileName || '-',
+    };
+  });
 
   const worksheet = XLSX.utils.json_to_sheet(excelData);
 
@@ -326,10 +437,11 @@ export function exportReportsToExcel(reports: WorkReportItem[], fileNamePrefix: 
     { wch: 5 },  // No
     { wch: 12 }, // 날짜
     { wch: 15 }, // 부문
-    { wch: 12 }, // 팀명
+    { wch: 14 }, // 팀명
     { wch: 12 }, // 담당자
-    { wch: 40 }, // 금일 업무
-    { wch: 40 }, // 익일 업무
+    { wch: 35 }, // 금일 업무
+    { wch: 45 }, // 업무 결과 (넉넉하게 설정)
+    { wch: 35 }, // 익일 업무
     { wch: 10 }, // 상태
     { wch: 35 }, // 이슈사항
     { wch: 15 }, // 금일휴가
@@ -343,50 +455,4 @@ export function exportReportsToExcel(reports: WorkReportItem[], fileNamePrefix: 
   const todayStr = new Date().toISOString().slice(2, 10).replace(/-/g, '');
   const finalFileName = `${fileNamePrefix}_${todayStr}.xlsx`;
   XLSX.writeFile(workbook, finalFileName);
-}
-
-// Generate & download sample team Excel file e.g. "260803 그리드팀 업무 공유.xlsx"
-export function generateSampleExcelFile(teamName: string, dateStr: string = '260803') {
-  const sampleRows = [
-    {
-      '부문': '전력사업부문',
-      '팀명': teamName,
-      '담당자': '김철수 팀장',
-      '금일업무': `${teamName} 주요 1차 통합 모듈 점검 및 현장 수치 확인`,
-      '익일업무': `${teamName} 2차 정밀 오차 검증 및 모니터링`,
-      '상태': '진행중',
-      '이슈사항': '센서 데이터 응답속도 100ms 지연 (네트워크 전송속도 점검중)',
-      '금일휴가': '',
-      '익일휴가': '',
-    },
-    {
-      '부문': '전력사업부문',
-      '팀명': teamName,
-      '담당자': '이영희 수석',
-      '금일업무': `${teamName} 데이터 최적화 파이프라인 알고리즘 작성 완료`,
-      '익일업무': '알고리즘 피크 타임 테스트 및 연동',
-      '상태': '완료',
-      '이슈사항': '특이사항 없음',
-      '금일휴가': '',
-      '익일휴가': '연차',
-    },
-    {
-      '부문': '전력사업부문',
-      '팀명': teamName,
-      '담당자': '박민수 책임',
-      '금일업무': '금일 연차 휴가',
-      '익일업무': `${teamName} 안전 진단 및 데이터 수집`,
-      '상태': '완료',
-      '이슈사항': '-',
-      '금일휴가': '연차',
-      '익일휴가': '',
-    },
-  ];
-
-  const worksheet = XLSX.utils.json_to_sheet(sampleRows);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, `${teamName}_일지`);
-
-  const fileName = `${dateStr} ${teamName} 업무 공유.xlsx`;
-  XLSX.writeFile(workbook, fileName);
 }
